@@ -1,0 +1,166 @@
+(ns utils.airtable
+  (:refer-clojure :exclude [filter])
+  (:require-macros [cljs.core.async.macros :refer [go]])
+  (:require ["airtable" :as Airtable]
+            [cljs.core.async :as async :refer [>! <! put! take! close!]]
+            [utils.async :as ua]
+            [utils.string :as us]
+            [clojure.string :as str]))
+
+(def RATE_LIMIT 5)
+
+(def ^:dynamic *airtable-db* nil)
+
+(def ^:dynamic *airtable-upper-fields* [])
+
+(def ^:dynamic *airtable-lower-fields* [])
+
+(def ^:dynamic *airtable-field-serializers* {})
+
+(defn- serialize-fields [fields]
+  (clj->js
+   (reduce
+    (fn [memo [key value]]
+      (let [transformed-key (us/start-case
+                             {:full-upper *airtable-upper-fields*
+                              :full-lower *airtable-lower-fields*}
+                             key)
+            serializer (key *airtable-field-serializers*)]
+        (assoc memo transformed-key (if serializer (serializer value) value))))
+    {}
+    fields)))
+
+(defn- jsonify-fields [fields]
+  (clj->js
+   (reduce
+    (fn [memo [key value]]
+      (assoc memo (keyword (us/kebab-case key)) value))
+    {}
+    fields)))
+
+(defn- gen-formula [& opt-coll]
+  (let [safe-str (fn safe-str [a]
+                   (cond-> a
+                     (keyword? a) name
+                     (symbol? a) name
+                     true str))
+        gen-find-subformula (fn gen-find-subformula [pair]
+                              (str "FIND(\"" (last pair) "\", {" (safe-str (first pair)) "})"))
+        opt-pairs (partition 2 opt-coll)
+        subformulas (map gen-find-subformula opt-pairs)]
+    (str "AND(" (str/join ", " subformulas) ")")))
+
+(defn filter [table-name & {:keys [formula limit]
+                            :or {limit js/Infinity}
+                            :as opts}]
+  (let [chan (async/chan)
+        sent-count-ref (atom 0)
+        conditon (cond-> {:view "Main View"}
+                   formula (assoc :filterByFormula formula)
+                   (not formula) (#(->> (dissoc opts :formula :limit)
+                                        ((fn [opts] (apply gen-formula (flatten (into [] opts)))))
+                                        (assoc % :filterByFormula)))
+                   true clj->js)]
+    (-> (*airtable-db* table-name)
+        (.select conditon)
+        (.eachPage
+         (fn [records fetch-next-page]
+           (.forEach
+            records
+            (fn [record]
+              (let [sent-count (deref sent-count-ref)]
+                (when (< sent-count limit)
+                  (put! chan [nil (-> (.-fields record)
+                                      js->clj
+                                      (into {"_id" (.-id record)}))])
+                  (swap! sent-count-ref #(+ % 1))))))
+           (if (< (deref sent-count-ref) limit)
+             (fetch-next-page)
+             (close! chan)))
+         (fn [err]
+           (when err (put! chan [err nil]))
+           (close! chan))))
+    chan))
+
+(defn all [table-name]
+  (filter table-name :formula "1 = 1"))
+
+(defn fetch [table-name id]
+  (filter table-name
+          :formula (str "SEARCH('" id "', {ID}) = 1")
+          :limit 1))
+
+
+
+(defmulti insert! (fn [table-name books] (if (map? books) :single :coll)))
+
+(defmethod insert! :single [table-name book]
+  (let [chan (async/chan)
+        data (serialize-fields book)]
+    (-> (*airtable-db* table-name)
+        (.create (clj->js data)
+                 (fn [err record]
+                   (put! chan [err record])
+                   (close! chan))))
+    chan))
+
+(defmethod insert! :coll [table-name books]
+  (ua/map (fn [book]
+            (go (println "create book" book)
+                (let [resp (<! (insert! table-name book))]
+                  (println "create book finished, " book)
+                  resp)))
+          books
+          :limit RATE_LIMIT
+          :failed? first))
+
+
+
+(defmulti update! (fn [table-name ids update] (if (coll? ids) :coll :single)))
+
+(defmethod update! :single [table-name id update]
+  (let [chan (async/chan)]
+    (go (let [record (<! (fetch table-name id))]
+          (-> (*airtable-db* table-name)
+              (.update
+               (record "_id")
+               (serialize-fields update)
+               (fn [err record]
+                 (put! chan [err record])
+                 (close! chan))))))
+    chan))
+
+(defmethod update! :coll [table-name ids update]
+  (go (<! (ua/map (fn [id]
+                    (go (println "patch book" id)
+                        (let [resp (<! (update! table-name id update))]
+                          (println "patch book finished, " id)
+                          resp)))
+                  ids
+                  :limit RATE_LIMIT
+                  :failed? first))))
+
+
+
+(defmulti delete! (fn [table-name ids] (if (coll? ids) :coll :single)))
+
+(defmethod delete! :single [table-name id]
+  (let [chan (async/chan)]
+    (go (let [record (<! (fetch table-name id))]
+          (-> (*airtable-db* table-name)
+              (.destroy
+               (record "_id")
+               (fn [err record]
+                 (put! chan [err record])
+                 (close! chan))))))
+    chan))
+
+(defmethod delete! :coll [table-name ids]
+  (go (<! (ua/map (fn [id]
+                    (go (println "delete book" id)
+                        (let [resp (<! (delete! table-name id))]
+                          (println "delete book finished, " id)
+                          resp)))
+                  ids
+                  :limit RATE_LIMIT
+                  :failed? first))))
