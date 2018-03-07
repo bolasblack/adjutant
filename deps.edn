@@ -1,0 +1,13 @@
+{:paths
+ ["src"]
+
+ :deps
+ {org.clojure/core.async {:mvn/version "0.4.474"}
+  org.clojars.akiel/async-error {:mvn/version "0.2"}
+  funcool/cats {:mvn/version "2.1.0"}
+  honeysql {:mvn/version "0.9.1"}}
+
+ :aliases
+ {:dev {:extra-deps {cider/cider-nrepl {:mvn/version "0.17.0-SNAPSHOT"}}}
+  :test {:extra-deps {pjstadig/humane-test-output {:mvn/version "0.8.3"}}
+         :extra-paths ["test"]}}}

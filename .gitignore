@@ -8,5 +8,7 @@ pom.xml
 /node_modules
 .env
 .shadow-cljs
+.cpcache
 .nrepl-*
-docker-app-volume
+.repl-*
+.cljs_*_repl

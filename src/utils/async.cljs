@@ -1,11 +1,12 @@
 (ns utils.async
   (:refer-clojure :exclude [map])
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
-  (:require [cljs.core.async :as async :refer [>! <! take! close!]]
+  (:require [cljs.core.async.impl.protocols]
+            [cljs.core.async :as async :refer [>! <! take! close!]]
             [cats.monad.either :as ce]))
 
 (defn chan? [a]
-  (= (type (async/chan)) (type a)))
+  (satisfies? cljs.core.async.impl.protocols/ReadPort a))
 
 (defn map [f coll & {:keys [limit failed?]}]
   (let [limit-chan (if limit
