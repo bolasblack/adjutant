@@ -36,3 +36,42 @@
      `(instance?
        (if-cljs js/Error Exception)
        ~obj)))
+
+#?(:clj
+   (defmacro cond-converge
+     "Example:
+
+  (macroexpand-1
+   '(cond-converge 1
+      (constantly 3)
+      (fn [const-3 prev-val]
+        (+ const-3 prev-val))))
+
+  # =>
+
+  (let [G__4572 (identity 1)
+        G__4572 (let [test__4547__auto__ (constantly 3)
+                      step__4548__auto__ (fn [const-3 prev-val] (+ const-3 prev-val))
+                      ___4549__auto__ (assert (and (fn? test__4547__auto__)
+                                                   (fn? step__4548__auto__)))
+                      test-result__4550__auto__ (test__4547__auto__ G__4572)]
+                  (if test-result__4550__auto__
+                    (step__4548__auto__ test-result__4550__auto__ G__4572)
+                    G__4572))]
+    G__4572)"
+     [expr & clauses]
+     (assert (even? (count clauses)))
+     (let [g (gensym)
+           steps (map (fn [[test step]]
+                        `(let [test# ~test
+                               step# ~step
+                               _# (assert (and (fn? test#)
+                                               (fn? step#)))
+                               test-result# (test# ~g)]
+                           (if test-result#
+                             (step# test-result# ~g)
+                             ~g)))
+                      (partition 2 clauses))]
+       `(let [~g ~expr
+              ~@(interleave (repeat g) steps)]
+          ~g))))

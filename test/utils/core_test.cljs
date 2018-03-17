@@ -29,3 +29,9 @@
     (uc/error! "test" {:with-data true})
     (catch js/Error err
       (is (uc/error? err)))))
+
+(deftest cond-converge
+  (is (= 1.5
+         (uc/cond-converge 3
+           dec #(* %1 %2)
+           (constantly 4) #(/ %2 %1)))))
