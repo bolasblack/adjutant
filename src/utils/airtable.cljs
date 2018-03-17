@@ -1,6 +1,6 @@
 (ns utils.airtable
   (:refer-clojure :exclude [filter])
-  (:require-macros [cljs.core.async.macros :refer [go]])
+  (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require ["airtable" :as Airtable]
             [cljs.core.async :as async :refer [>! <! put! take! close!]]
             [utils.async :as ua]
@@ -16,6 +16,15 @@
 (def ^:dynamic *airtable-lower-fields* [])
 
 (def ^:dynamic *airtable-field-serializers* {})
+
+(defn- create-rate-limit-chan []
+  (let [chan (async/chan RATE_LIMIT)]
+    (go-loop []
+      (dotimes [n 5]
+        (>! chan :start))
+      (<! (async/timeout (* 1000 60)))
+      (recur))
+    chan))
 
 (defn- serialize-fields [fields]
   (clj->js
@@ -105,14 +114,14 @@
     chan))
 
 (defmethod insert! :coll [table-name books]
-  (ua/map (fn [book]
-            (go (println "create book" book)
-                (let [resp (<! (insert! table-name book))]
-                  (println "create book finished, " book)
-                  resp)))
-          books
-          :limit RATE_LIMIT
-          :failed? first))
+  (ua/limit-map
+   (fn [book]
+     (go (println "create book" book)
+         (let [resp (<! (insert! table-name book))]
+           (println "create book finished, " book)
+           resp)))
+   books
+   (create-rate-limit-chan)))
 
 
 
@@ -131,14 +140,14 @@
     chan))
 
 (defmethod update! :coll [table-name ids update]
-  (go (<! (ua/map (fn [id]
-                    (go (println "patch book" id)
-                        (let [resp (<! (update! table-name id update))]
-                          (println "patch book finished, " id)
-                          resp)))
-                  ids
-                  :limit RATE_LIMIT
-                  :failed? first))))
+  (ua/limit-map
+   (fn [id]
+     (go (println "patch book" id)
+         (let [resp (<! (update! table-name id update))]
+           (println "patch book finished, " id)
+           resp)))
+   ids
+   (create-rate-limit-chan)))
 
 
 
@@ -156,11 +165,11 @@
     chan))
 
 (defmethod delete! :coll [table-name ids]
-  (go (<! (ua/map (fn [id]
-                    (go (println "delete book" id)
-                        (let [resp (<! (delete! table-name id))]
-                          (println "delete book finished, " id)
-                          resp)))
-                  ids
-                  :limit RATE_LIMIT
-                  :failed? first))))
+  (ua/limit-map
+   (fn [id]
+     (go (println "delete book" id)
+         (let [resp (<! (delete! table-name id))]
+           (println "delete book finished, " id)
+           resp)))
+   ids
+   (create-rate-limit-chan)))

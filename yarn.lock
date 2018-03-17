@@ -1982,6 +1982,10 @@ lodash@^4.17.4:
   version "4.17.5"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.5.tgz#99a92d65c0272debe8c96b6057bc8fbfa3bed511"
 
+lolex@^2.3.2:
+  version "2.3.2"
+  resolved "https://registry.yarnpkg.com/lolex/-/lolex-2.3.2.tgz#85f9450425103bf9e7a60668ea25dc43274ca807"
+
 long@^3.2.0:
   version "3.2.0"
   resolved "https://registry.yarnpkg.com/long/-/long-3.2.0.tgz#d821b7138ca1cb581c172990ef14db200b5c474b"
@@ -2735,9 +2739,9 @@ shadow-cljs-jar@1.1.2:
   version "1.1.2"
   resolved "https://registry.yarnpkg.com/shadow-cljs-jar/-/shadow-cljs-jar-1.1.2.tgz#88664fae5957a7c21554e1a33476f1c475162c92"
 
-shadow-cljs@^2.2.4:
-  version "2.2.4"
-  resolved "https://registry.yarnpkg.com/shadow-cljs/-/shadow-cljs-2.2.4.tgz#518a304a2c8b0c3edd138d50d446c0e9c9472d79"
+shadow-cljs@^2.2.7:
+  version "2.2.7"
+  resolved "https://registry.yarnpkg.com/shadow-cljs/-/shadow-cljs-2.2.7.tgz#b7ed1ff9c1f55ed2cf0564dda27686206b0176ef"
   dependencies:
     babel-core "^6.26.0"
     babel-preset-env "^1.6.0"

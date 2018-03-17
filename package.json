@@ -7,7 +7,8 @@
   },
   "devDependencies": {
     "chokidar-cli": "^1.2.0",
-    "shadow-cljs": "^2.2.4",
+    "lolex": "^2.3.2",
+    "shadow-cljs": "^2.2.7",
     "source-map-support": "^0.5.3"
   },
   "dependencies": {
