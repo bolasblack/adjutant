@@ -16,14 +16,6 @@
           (AWS/Config. {:accessKeyId aws-key
                         :secretAccessKey aws-secret}))))
 
-(defn tap-l [& msgs]
-  (apply println msgs)
-  (first msgs))
-
-(defn tap-r [& msgs]
-  (apply println msgs)
-  (last msgs))
-
 (defn paramify [params]
   (->> params
        (into {})
