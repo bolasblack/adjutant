@@ -7,26 +7,22 @@
             [cats.monad.either :as ce]
             [utils.async :as ua :include-macros true]))
 
-(defn- round-time [time]
-  (js/Math.round (/ time 1000)))
 
-(defn- close-to? [expected actual &
-                  {:keys [deviate]
-                   :or {deviate 100}}]
-  (some #(= actual %)
-        (range (- expected deviate)
-               (+ expected deviate))))
 
-(defn- create-chan [duration & args]
-  (let [chan (async/chan)]
-    (go (<! (async/timeout duration))
-        (>! chan (into [1] args))
-        (<! (async/timeout duration))
-        (>! chan (into [2] args))
-        (<! (async/timeout duration))
-        (>! chan (into [3] args))
-        (async/close! chan))
-    chan))
+
+(deftest chan?
+  (is (not (ua/chan? [])))
+  (is (ua/chan? (async/chan))))
+
+
+
+
+(deftest promise?
+  (is (not (ua/promise? [])))
+  (is (ua/promise? (js/Promise.resolve 1))))
+
+
+
 
 (deftest error?
   (is (ua/error? (js/Error.)))
@@ -48,13 +44,8 @@
     (catch js/Error err
       (is err.message "Unsupported policy: :unknown"))))
 
-(deftest chan?
-  (is (not (ua/chan? [])))
-  (is (ua/chan? (async/chan))))
 
-(deftest promise?
-  (is (not (ua/promise? [])))
-  (is (ua/promise? (js/Promise.resolve 1))))
+
 
 (deftest limit-map
   (ct/async
@@ -95,14 +86,78 @@
 
      (done))))
 
+
+
+
+(deftest pack-value
+  (let [err (js/Error. "test")]
+    (is (= 1 (ua/pack-value 1)))
+
+    (is (= 1 (ua/pack-value 1 :policy :error)))
+    (is (= err (ua/pack-value err :policy :error)))
+
+    (is (= [nil 1] (ua/pack-value 1 :policy :node)))
+    (is (= [nil err] (ua/pack-value err :policy :node)))
+
+    (is (= (ce/right 1) (ua/pack-value 1 :policy :cats-either)))
+    (is (= (ce/right err) (ua/pack-value err :policy :cats-either)))))
+
+
+
+
+(deftest pack-error
+  (let [err (js/Error. "test")]
+    (let [ex (ua/pack-error 1)]
+      (is (= "" (.-message ex)))
+      (is (= {:reason 1} (ex-data ex))))
+
+    (let [ex (ua/pack-error 1 :policy :error)]
+      (is (= "" (.-message ex)))
+      (is (= {:reason 1} (ex-data ex))))
+    (let [ex (ua/pack-error err :policy :error)]
+      (is (identical? ex err)))
+
+    (is (= [1 nil] (ua/pack-error 1 :policy :node)))
+    (is (= [err nil] (ua/pack-error err :policy :node)))
+
+    (is (= (ce/left 1) (ua/pack-error 1 :policy :cats-either)))
+    (is (= (ce/left err) (ua/pack-error err :policy :cats-either)))))
+
+
+
+
 (deftest from-promise
   (ct/async
    done
-   (ua/go-let [c1 (ua/from-promise (js/Promise.resolve 1))
-               c2 (ua/from-promise (js/Promise.reject 1))]
-     (is (= [nil 1] (<! c1)))
-     (is (= [1 nil] (<! c2)))
+   (ua/go
+     (with-redefs [ua/pack-value #(hash-map :packed-by :val :args %&)
+                   ua/pack-error #(hash-map :packed-by :err :args %&)]
+       (let [c1 (ua/from-promise (js/Promise.resolve 1) :policy :node)
+             c2 (ua/from-promise (js/Promise.reject 2) :policy :cats-either)]
+         (is (= {:packed-by :val :args '(1 :policy :node)} (<! c1)))
+         (is (= {:packed-by :err :args '(2 :policy :cats-either)} (<! c2)))))
      (done))))
+
+
+
+
+(defn- close-to? [expected actual &
+                  {:keys [deviate]
+                   :or {deviate 100}}]
+  (some #(= actual %)
+        (range (- expected deviate)
+               (+ expected deviate))))
+
+(defn- create-chan [duration & args]
+  (let [chan (async/chan)]
+    (go (<! (async/timeout duration))
+        (>! chan (into [1] args))
+        (<! (async/timeout duration))
+        (>! chan (into [2] args))
+        (<! (async/timeout duration))
+        (>! chan (into [3] args))
+        (async/close! chan))
+    chan))
 
 (deftest wait-multiple-chan
   (ct/async
@@ -134,6 +189,9 @@
 
      (done))))
 
+
+
+
 (deftest go-try-test
   (ct/async
    done
@@ -156,11 +214,15 @@
                    :invalid-resp))))
      (done))))
 
+
+
+
 (defn read-both [ch-a ch-b]
   (ua/go-try
    (let [a (ua/<? ch-a)
          b (ua/<? ch-b)]
      [a b])))
+
 (deftest read-both-test-1
   (ct/async
    done
@@ -170,6 +232,7 @@
      (put! ch-a e)
      (is (= e (<! (read-both ch-a ch-b))))
      (done))))
+
 (deftest read-both-test-2
   (ct/async
    done
@@ -180,6 +243,7 @@
      (put! ch-b e)
      (is (= e (<! (read-both ch-a ch-b))))
      (done))))
+
 (deftest read-both-test-3
   (ct/async
    done
