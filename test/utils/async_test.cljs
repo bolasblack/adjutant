@@ -3,7 +3,7 @@
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [pjstadig.humane-test-output]
             [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
-            [cljs.core.async :as async :refer [<! >!]]
+            [cljs.core.async :as async :refer [<! >! put!]]
             [cats.monad.either :as ce]
             [utils.async :as ua :include-macros true]))
 
@@ -49,8 +49,12 @@
       (is err.message "Unsupported policy: :unknown"))))
 
 (deftest chan?
-  (is (ua/chan? (async/chan)))
-  (is (not (ua/chan? []))))
+  (is (not (ua/chan? [])))
+  (is (ua/chan? (async/chan))))
+
+(deftest promise?
+  (is (not (ua/promise? [])))
+  (is (ua/promise? (js/Promise.resolve 1))))
 
 (deftest limit-map
   (ct/async
@@ -128,4 +132,62 @@
                '([3 :a1 :a2]
                  [3 :b1 :b2])))]
 
+     (done))))
+
+(deftest go-try-test
+  (ct/async
+   done
+   (ua/go-let [e (ex-info "foo" {})
+               ch (async/chan)]
+     (put! ch e)
+     (is (= e (<! (ua/go-try
+                   (ua/<? ch)
+                   :invalid-resp))))
+     (done))))
+
+(deftest go-try-test-with-non-standard-error
+  (ct/async
+   done
+   (ua/go-let [e [123 nil]
+               ch (async/chan)]
+     (put! ch e)
+     (is (= e (<! (ua/go-try
+                   (ua/<? ch :policy :node)
+                   :invalid-resp))))
+     (done))))
+
+(defn read-both [ch-a ch-b]
+  (ua/go-try
+   (let [a (ua/<? ch-a)
+         b (ua/<? ch-b)]
+     [a b])))
+(deftest read-both-test-1
+  (ct/async
+   done
+   (ua/go-let [e (ex-info "foo" {})
+               ch-a (async/chan)
+               ch-b (async/chan)]
+     (put! ch-a e)
+     (is (= e (<! (read-both ch-a ch-b))))
+     (done))))
+(deftest read-both-test-2
+  (ct/async
+   done
+   (ua/go-let [e (ex-info "foo" {})
+               ch-a (async/chan)
+               ch-b (async/chan)]
+     (put! ch-a 1)
+     (put! ch-b e)
+     (is (= e (<! (read-both ch-a ch-b))))
+     (done))))
+(deftest read-both-test-3
+  (ct/async
+   done
+   (ua/go-let [e (ex-info "foo" {})
+               ch-a (async/chan)
+               ch-b (async/chan)]
+     (put! ch-a e)
+     (put! ch-b 1)
+     (read-both ch-a ch-b)
+     (is (= 1 (<! ch-b)))
      (done))))
