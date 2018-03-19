@@ -1,7 +1,6 @@
 (ns utils.aws.dynamo
   (:require-macros [cljs.core.async.macros :refer [go go-loop]]
-                   [cats.core :refer [alet]]
-                   [utils.macros :refer [condpipe]])
+                   [cats.core :refer [alet]])
   (:require ["aws-sdk" :refer [DynamoDB]]
             [cats.core :as cc]
             [cats.monad.either :as ce]

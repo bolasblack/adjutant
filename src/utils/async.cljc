@@ -72,7 +72,7 @@
   (condp = policy
     :error
     (cond (uc/error? obj) obj
-          (string? obj) (js/Error. obj)
+          (string? obj) (new #?(:cljs js/Error :clj RuntimeException) obj)
           :else (ex-info "" {:reason obj}))
 
     :node
