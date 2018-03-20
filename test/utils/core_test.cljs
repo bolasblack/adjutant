@@ -1,7 +1,8 @@
 (ns utils.core-test
-  (:require [pjstadig.humane-test-output]
-            [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
-            [utils.core :as uc :include-macros true]))
+  (:require
+   [pjstadig.humane-test-output]
+   [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
+   [utils.core :as uc :include-macros true]))
 
 (deftest error
   (let [err (uc/error "test error msg")]
