@@ -3,6 +3,15 @@
             [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
             [utils.core :as uc :include-macros true]))
 
+(deftest error
+  (let [err (uc/error "test error msg")]
+    (is (.-message err) "test error msg"))
+
+  (let [err (uc/error "test error msg1" {:with-meta true})]
+    (is (.-message err) "test error msg1")
+    (is (.-data err) {:with-meta true})
+    (is (ex-data err) {:with-meta true})))
+
 (deftest error!
   (try
     (uc/error! "test error msg")
@@ -15,7 +24,8 @@
     (is false)
     (catch js/Error err
       (is (.-message err) "test error msg1")
-      (is (.-data err) {:with-meta true}))))
+      (is (.-data err) {:with-meta true})
+      (is (ex-data err) {:with-meta true}))))
 
 (deftest error?
   (is (not (uc/error? 1)))

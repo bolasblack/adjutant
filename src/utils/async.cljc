@@ -1,9 +1,9 @@
 (ns utils.async
-  #?(:cljs (:require-macros [utils.async :refer [go go-loop go-let go-try-let]]))
+  #?(:cljs (:require-macros [utils.async :refer [go go-loop go-let go-try-let <<! <!]]))
   (:require [clojure.core.async.impl.protocols]
             [clojure.core.async
              :as async
-             :refer [<! >! take! put! close!]]
+             :refer [>! take! put! close!]]
             [cats.monad.either :as ce]
             [utils.core :as uc]))
 
@@ -30,6 +30,11 @@
 
 #?(:clj (defmacro go-try-let [binding & body]
           `(go-try (let ~binding ~@body))))
+
+#?(:clj (defmacro <! [ch]
+          `(uc/if-cljs
+            (cljs.core.async/<! ~ch)
+            (clojure.core.async/<! ~ch))))
 
 (defn chan? [a]
   (satisfies? clojure.core.async.impl.protocols/ReadPort a))
@@ -72,7 +77,7 @@
   (condp = policy
     :error
     (cond (uc/error? obj) obj
-          (string? obj) (new #?(:cljs js/Error :clj RuntimeException) obj)
+          (string? obj) (uc/error obj)
           :else (ex-info "" {:reason obj}))
 
     :node
@@ -121,6 +126,13 @@
     e))
 
 #?(:clj (defmacro <? [ch & error?-opts]
-          `(uc/if-cljs
-            (throw-err (cljs.core.async/<! ~ch) ~@error?-opts)
-            (throw-err (clojure.core.async/<! ~ch) ~@error?-opts))))
+          `(throw-err (<! ~ch) ~@error?-opts)))
+
+(defn flat-chan [ch]
+  (go-loop [c ch]
+    (if (chan? c)
+      (recur (<! c))
+      c)))
+
+#?(:clj (defmacro <<! [ch]
+          `(<! (flat-chan ~ch))))

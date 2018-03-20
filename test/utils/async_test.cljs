@@ -255,3 +255,17 @@
      (read-both ch-a ch-b)
      (is (= 1 (<! ch-b)))
      (done))))
+
+
+
+
+(deftest <<!
+  (ct/async
+   done
+   (ua/go-let [chan1 (go (go (go 1)))
+               chan2 (go 1)
+               chan3 1]
+     (is (= 1 (ua/<<! chan1)))
+     (is (= 1 (ua/<<! chan2)))
+     (is (= 1 (ua/<<! chan3)))
+     (done))))

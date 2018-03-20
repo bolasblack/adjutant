@@ -14,22 +14,30 @@
      [then else]
      (if (cljs-env? &env) then else)))
 
+(defn error
+  ([s]
+   #?(:cljs (js/Error. s)
+      :clj (RuntimeException. s)))
+  ([s m]
+   #?(:cljs (ex-info s m)
+      :clj (ex-info s m))))
+
 #?(:clj
    (defmacro error!
      "Generate a cross-platform exception appropriate to the macroexpansion context
   https://github.com/plumatic/schema/blob/012396d62842af8191dbd65166746aa72996d4f1/src/clj/schema/macros.clj#L33-L43"
      ([s]
       `(if-cljs
-        (throw (js/Error. ~s))
-        (throw (RuntimeException. ~(if (seq? s)
-                                     (with-meta s `{:tag java.lang.String})
-                                     s)))))
+        (throw (error ~s))
+        (throw (error ~(if (seq? s)
+                         (with-meta s `{:tag java.lang.String})
+                         s)))))
      ([s m]
       `(if-cljs
-        (throw (ex-info ~s ~m))
-        (throw (clojure.lang.ExceptionInfo. ~(if (seq? s)
-                                               (with-meta s `{:tag java.lang.String})
-                                               s) ~m))))))
+        (throw (error ~s ~m))
+        (throw (error ~(if (seq? s)
+                         (with-meta s `{:tag java.lang.String})
+                         s) ~m))))))
 
 #?(:clj
    (defmacro error? [obj]
