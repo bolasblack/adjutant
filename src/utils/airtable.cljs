@@ -27,25 +27,21 @@
     chan))
 
 (defn- serialize-fields [fields]
-  (clj->js
-   (reduce
-    (fn [memo [key value]]
-      (let [transformed-key (us/start-case
-                             {:full-upper *airtable-upper-fields*
-                              :full-lower *airtable-lower-fields*}
-                             key)
-            serializer (key *airtable-field-serializers*)]
-        (assoc memo transformed-key (if serializer (serializer value) value))))
-    {}
-    fields)))
+  (->> (us/start-case-keys fields)
+       (us/walk-keys
+        (fn [key]
+          (cond
+            (some #(= key %) *airtable-upper-fields*)
+            (str/upper-case key)
 
-(defn- jsonify-fields [fields]
-  (clj->js
-   (reduce
-    (fn [memo [key value]]
-      (assoc memo (keyword (us/kebab-case key)) value))
-    {}
-    fields)))
+            (some #(= key %) *airtable-lower-fields*)
+            (str/lower-case key)
+
+            :else
+            (if-let [serializer (key *airtable-field-serializers*)]
+              (serializer key)
+              key))))
+       clj->js))
 
 (defn- gen-formula [& opt-coll]
   (let [safe-str (fn safe-str [a]
