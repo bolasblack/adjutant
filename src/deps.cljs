@@ -1,8 +1,8 @@
 {:npm-deps
- {:airtable "0.5.0"
-  :aws-sdk "2.113.0"
+ {:airtable "^0.5.0"
+  :aws-sdk "^2.113.0"
   :gulp "gulp@next"
-  :lodash.isobjectlike "4.3.1"
-  :lodash.kebabcase "4.3.1"
-  :lodash.startcase "4.3.1"
-  :lodash.lowerfirst "4.3.1"}}
+  :lodash.isobjectlike "^4.0.0"
+  :lodash.kebabcase "^4.0.0"
+  :lodash.startcase "^4.0.0"
+  :lodash.lowerfirst "^4.0.0"}}

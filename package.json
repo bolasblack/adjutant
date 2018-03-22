@@ -6,19 +6,16 @@
     "compile": "shadow-cljs compile"
   },
   "devDependencies": {
-    "chokidar-cli": "^1.2.0",
-    "lolex": "^2.3.2",
     "shadow-cljs": "^2.2.7",
     "source-map-support": "^0.5.3"
   },
   "dependencies": {
     "airtable": "^0.5.0",
     "aws-sdk": "^2.113.0",
-    "gulp": "gulpjs/gulp#4.0",
+    "gulp": "^4.0.0",
     "lodash.isobjectlike": "^4.0.0",
-    "lodash.kebabcase": "^4.1.1",
-    "lodash.lowerfirst": "4.3.1",
-    "lodash.startcase": "^4.4.0",
-    "mysql2": "^1.4.2"
+    "lodash.kebabcase": "^4.0.0",
+    "lodash.lowerfirst": "^4.0.0",
+    "lodash.startcase": "^4.0.0"
   }
 }
