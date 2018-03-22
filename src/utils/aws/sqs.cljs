@@ -1,7 +1,6 @@
 (ns utils.aws.sqs
-  (:require-macros [cljs.core.async.macros :refer [go]])
-  (:require [cljs.core.async :as async :refer [>! close!]]
-            [utils.aws :as aws]
+  (:require [cljs.core.async :as async :refer [put! close!]]
+            [utils.string :as us]
             ["aws-sdk" :refer [SQS]]))
 
 (def sqs (SQS.))
@@ -11,18 +10,17 @@
         sqs-opts (->> params
                       (partition 2)
                       (map vec)
-                      aws/paramify
+                      (#(us/paramify % :first-upper? true))
                       clj->js)]
     (.sendMessage
      sqs
      sqs-opts
      (fn [err data]
-       (go
-         (>! chan (if err
-                    [err nil]
-                    [nil {:md5-of-message-body data.MD5OfMessageBody
-                          :md5-of-message-attributes data.MD5OfMessageAttributes
-                          :message-id data.MessageId
-                          :sequence-number data.SequenceNumber}]))
-         (close! chan))))
+       (put! chan
+             (or err
+                 {:md5-of-message-body data.MD5OfMessageBody
+                  :md5-of-message-attributes data.MD5OfMessageAttributes
+                  :message-id data.MessageId
+                  :sequence-number data.SequenceNumber})
+             #(close! chan))))
     chan))

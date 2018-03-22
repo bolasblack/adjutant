@@ -1,7 +1,5 @@
 (ns utils.aws
-  (:require [clojure.string :as str]
-            ["aws-sdk" :as AWS]
-            ["lodash.startcase" :as lodash-start-case]))
+  (:require ["aws-sdk" :as AWS]))
 
 (let [aws-profile js/process.env.AWS_PROFILE
       aws-key js/process.env.AWS_KEY
@@ -15,13 +13,3 @@
     (set! (.-config AWS)
           (AWS/Config. {:accessKeyId aws-key
                         :secretAccessKey aws-secret}))))
-
-(defn paramify [params]
-  (->> params
-       (into {})
-       (map (fn [[k v]] [(-> (name k)
-                             lodash-start-case
-                             (str/replace " " "")
-                             keyword)
-                         v]))
-       (into {})))

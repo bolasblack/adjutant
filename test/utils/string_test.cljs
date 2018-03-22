@@ -32,7 +32,8 @@
           {:hello--world-? true
            'a-coll- ["a" "b"]
            [] {:nested-map-key! 1
-               "nested-map-key2" true}}))))
+               "nested-map-key2" true}}
+          :keep-pred true))))
 
 (deftest start-case-keys
   (is (= {(keyword "Hello World?") true
@@ -43,4 +44,26 @@
           {:hello--world-? true
            'a-coll- ["a" "b"]
            [] {:nested-map-key! 1
-               "nested-map-key2" true}}))))
+               "nested-map-key2" true}}
+          :keep-pred true))))
+
+(deftest paramify
+  (is (= {:helloWorld true
+          :aColl ["a" "b"]
+          [] {:nestedMapKey 1
+              :nestedMapKey2 true}}
+         (us/paramify
+          {:hello--world-? true
+           'a-coll- ["a" "b"]
+           [] {:nested-map-key! 1
+               "nested-map-key2" true}})))
+  (is (= {:HelloWorld true
+          :AColl ["a" "b"]
+          [] {:NestedMapKey 1
+              :NestedMapKey2 true}}
+         (us/paramify
+          {:hello--world-? true
+           'a-coll- ["a" "b"]
+           [] {:nested-map-key! 1
+               "nested-map-key2" true}}
+          :first-upper? true))))

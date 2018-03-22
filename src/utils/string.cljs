@@ -1,6 +1,7 @@
 (ns utils.string
   (:require ["lodash.startcase" :as lodash-start-case]
             ["lodash.kebabcase" :as lodash-kebab-case]
+            ["lodash.lowerfirst" :as lodash-lower-first]
             [clojure.string :as str]))
 
 (defn kebab-case [s & {:keys [keep-pred]}]
@@ -25,28 +26,45 @@
              (if (map? v) (walk-keys f v) v)])]
     (into {} (map transform-pair hash))))
 
-(defn kebab-case-keys [hash]
-  (letfn [(transform-key [key]
-            (cond (or (keyword? key)
-                      (symbol? key))
-                  (keyword (kebab-case (name key) :keep-pred true))
+(defn kebab-case-keys [hash & opts]
+  (walk-keys
+   (fn [key]
+     (cond (or (keyword? key)
+               (symbol? key))
+           (keyword (apply kebab-case (name key) opts))
 
-                  (string? key)
-                  (kebab-case key :keep-pred true)
+           (string? key)
+           (apply kebab-case key opts)
 
-                  :else
-                  key))]
-    (walk-keys transform-key hash)))
+           :else
+           key))
+   hash))
 
-(defn start-case-keys [hash]
-  (letfn [(transform-key [key]
-            (cond (or (keyword? key)
-                      (symbol? key))
-                  (keyword (start-case (name key) :keep-pred true))
+(defn start-case-keys [hash & opts]
+  (walk-keys
+   (fn [key]
+     (cond (or (keyword? key)
+               (symbol? key))
+           (keyword (apply start-case (name key) opts))
 
-                  (string? key)
-                  (start-case key :keep-pred true)
+           (string? key)
+           (apply start-case key opts)
 
-                  :else
-                  key))]
-    (walk-keys transform-key hash)))
+           :else
+           key))
+   hash))
+
+(defn paramify [hash & {:keys [first-upper?]
+                        :or {first-upper? false}}]
+  (walk-keys
+   (fn [key]
+     (if (or (keyword? key)
+             (symbol? key)
+             (string? key))
+       (-> (name key)
+           lodash-start-case
+           (str/replace " " "")
+           ((if first-upper? identity lodash-lower-first))
+           keyword)
+       key))
+   hash))
