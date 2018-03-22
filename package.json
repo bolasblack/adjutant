@@ -1,8 +1,6 @@
 {
   "scripts": {
     "watch": "shadow-cljs watch main main-test",
-    "watch:test": "chokidar lib/main-test.js --initial -c 'yarn test'",
-    "test": "node lib/main-test.js",
     "compile": "shadow-cljs compile"
   },
   "devDependencies": {
