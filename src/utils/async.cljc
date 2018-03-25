@@ -36,11 +36,15 @@
             (cljs.core.async/<! ~ch)
             (clojure.core.async/<! ~ch))))
 
+
+
 (defn chan? [a]
   (satisfies? clojure.core.async.impl.protocols/ReadPort a))
 
 (defn promise? [obj]
   (and obj (fn? (.-then obj))))
+
+
 
 (def default-error-policy :error)
 
@@ -88,6 +92,58 @@
 
     (uc/error! (str "Unsupported policy: " policy))))
 
+
+
+(defn throw-err [e & error?-opts]
+  (if (apply error? e error?-opts)
+    (if (uc/error? e)
+      (throw e)
+      (uc/error! "Wrap error from channel"
+                 {::from-<? true :original e}))
+    e))
+
+#?(:clj (defmacro <? [ch & error?-opts]
+          `(throw-err (<! ~ch) ~@error?-opts)))
+
+
+
+#?(:cljs
+   (defn from-promise
+     "Transform `js/Promise` to `cljs.core.async/chan`, wrap error
+  with `(pack-error % :policy :error)` if not reject with `js/Error`"
+     [promise]
+     (let [chan (async/chan)]
+       (.then
+        promise
+        #(put! chan %1 (fn [] (close! chan)))
+        #(let [err (if (uc/error? %1)
+                     %1
+                     (pack-error %1 :policy :error))]
+           (put! chan err (fn [] (close! chan)))))
+       chan)))
+
+#?(:clj (defmacro <p! [promise]
+          `(<! (from-promise ~promise))))
+
+#?(:clj (defmacro <p? [promise & error?-opts]
+          `(<? (from-promise ~promise) ~@error?-opts)))
+
+
+
+(defn flat-chan [ch]
+  (go-loop [c ch]
+    (if (chan? c)
+      (recur (<! c))
+      c)))
+
+#?(:clj (defmacro <<! [ch]
+          `(<! (flat-chan ~ch))))
+
+#?(:clj (defmacro <<? [ch & error?-opts]
+          `(<? (flat-chan ~ch) ~@error?-opts)))
+
+
+
 (defn limit-map [f source limit-chan]
   (let [src-chan (if (chan? source)
                    source
@@ -103,36 +159,3 @@
           (recur))
         (close! dst-chan)))
     dst-chan))
-
-#?(:cljs
-   (defn from-promise
-     "Transform `js/Promise` to `cljs.core.async/chan`, wrap
-  value with `pack-value`, `pack-error`"
-     [promise & {:keys [policy]
-                 :or {policy default-error-policy}}]
-     (let [chan (async/chan)]
-       (.then
-        promise
-        #(do (put! chan (apply pack-value [%1 :policy policy]))
-             (close! chan))
-        #(do (put! chan (apply pack-error [%1 :policy policy]))
-             (close! chan)))
-       chan)))
-
-(defn throw-err [e & error?-opts]
-  (if (apply error? e error?-opts)
-    (uc/error! "Error from channel"
-               {::from-<? true :original e})
-    e))
-
-#?(:clj (defmacro <? [ch & error?-opts]
-          `(throw-err (<! ~ch) ~@error?-opts)))
-
-(defn flat-chan [ch]
-  (go-loop [c ch]
-    (if (chan? c)
-      (recur (<! c))
-      c)))
-
-#?(:clj (defmacro <<! [ch]
-          `(<! (flat-chan ~ch))))

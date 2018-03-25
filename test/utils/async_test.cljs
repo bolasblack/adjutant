@@ -1,6 +1,7 @@
 (ns utils.async-test
   (:refer-clojure :exclude [map])
-  (:require-macros [cljs.core.async.macros :refer [go]])
+  (:require-macros [cljs.core.async.macros :refer [go]]
+                   [alter-cljs.core :refer [alter-var-root]])
   (:require [pjstadig.humane-test-output]
             [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
             [cljs.core.async :as async :refer [<! >! put!]]
@@ -129,14 +130,29 @@
 (deftest from-promise
   (ct/async
    done
-   (ua/go
-     (with-redefs [ua/pack-value #(hash-map :packed-by :val :args %&)
-                   ua/pack-error #(hash-map :packed-by :err :args %&)]
-       (let [c1 (ua/from-promise (js/Promise.resolve 1) :policy :node)
-             c2 (ua/from-promise (js/Promise.reject 2) :policy :cats-either)]
-         (is (= {:packed-by :val :args '(1 :policy :node)} (<! c1)))
-         (is (= {:packed-by :err :args '(2 :policy :cats-either)} (<! c2)))))
+   (ua/go-let [fake-error (js/Error. "fake error")
+               r1 (<! (ua/from-promise (js/Promise.resolve 1)))
+               r2 (<! (ua/from-promise (js/Promise.reject 2)))
+               r3 (<! (ua/from-promise (js/Promise.reject fake-error)))]
+     (is (= 1 r1))
+     (is (= {:reason 2} (ex-data r2)))
+     (is (= fake-error r3))
      (done))))
+
+(deftest <p!
+  (let [fake-error (js/Error.)
+        resp (macroexpand-1 '(ua/<p! promise))]
+    (is (= '(utils.async/<! (utils.async/from-promise promise))
+           resp))))
+
+(deftest <p?
+  (let [fake-error (js/Error.)
+        r1 (macroexpand-1 '(ua/<p? promise))
+        r2 (macroexpand-1 '(ua/<p? promise :policy :node))]
+    (is (= '(utils.async/<? (utils.async/from-promise promise))
+           r1))
+    (is (= '(utils.async/<? (utils.async/from-promise promise) :policy :node)
+           r2))))
 
 
 
@@ -197,10 +213,15 @@
    done
    (ua/go-let [e (ex-info "foo" {})
                ch (async/chan)]
-     (put! ch e)
+     (>! ch e)
      (is (= e (<! (ua/go-try
                    (ua/<? ch)
                    :invalid-resp))))
+     (ua/go-try
+      (try
+        (ua/<? ch)
+        (catch js/Error err
+          (is (= e err)))))
      (done))))
 
 (deftest go-try-test-with-non-standard-error
@@ -208,10 +229,17 @@
    done
    (ua/go-let [e [123 nil]
                ch (async/chan)]
-     (put! ch e)
+     (>! ch e)
      (is (= e (<! (ua/go-try
                    (ua/<? ch :policy :node)
                    :invalid-resp))))
+     (>! ch e)
+     (ua/go-try
+      (try
+        (ua/<? ch :policy :node)
+        (catch js/Error err
+          (is (= {:ua/from-<? true
+                  :original [123 nil]})))))
      (done))))
 
 
@@ -259,13 +287,25 @@
 
 
 
-(deftest <<!
+(deftest flat-chan
   (ct/async
    done
    (ua/go-let [chan1 (go (go (go 1)))
                chan2 (go 1)
                chan3 1]
-     (is (= 1 (ua/<<! chan1)))
-     (is (= 1 (ua/<<! chan2)))
-     (is (= 1 (ua/<<! chan3)))
+     (is (= 1 (<! (ua/flat-chan chan1))))
+     (is (= 1 (<! (ua/flat-chan chan2))))
+     (is (= 1 (<! (ua/flat-chan chan3))))
      (done))))
+
+(deftest <<!
+  (let [res (macroexpand-1 '(ua/<<! chan))]
+    (is (= '(ua/<! (ua/flat-chan chan)) res))))
+
+(deftest <<?
+  (let [r1 (macroexpand-1 '(ua/<<? chan))
+        r2 (macroexpand-1 '(ua/<<? chan :policy :node))]
+    (is (= '(ua/<? (ua/flat-chan chan))
+           r1))
+    (is (= '(ua/<? (ua/flat-chan chan) :policy :node)
+           r2))))
