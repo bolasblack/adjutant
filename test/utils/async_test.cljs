@@ -2,10 +2,12 @@
   (:refer-clojure :exclude [map])
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [pjstadig.humane-test-output]
+            [goog.object :as go]
             [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
             [cljs.core.async :as async :refer [<! >! put!]]
             [cats.monad.either :as ce]
-            [utils.async :as ua :include-macros true]))
+            [utils.async :as ua :include-macros true]
+            ["lodash.isequal" :as js-equal]))
 
 
 
@@ -236,6 +238,65 @@
            r1))
     (is (= '(utils.async/<? (utils.async/promise->chan promise) :policy :node)
            r2))))
+
+
+
+(defn- is-async-iterator [obj]
+  (let [res-fn (go/get obj js/Symbol.asyncIterator)
+        res (res-fn)
+        _ (is (fn? res-fn))
+        _ (is (= res obj))
+        _ (is (fn? (.-next obj)))]))
+
+(defn- next-async-iterator [next done value]
+  (ua/go-let [_ (is (ua/promise? next))
+              res (ua/<p! next)
+              _ (is (= done (.-done res)))
+              _ (is (js-equal value (.-value res)))]))
+
+(deftest chan->async-iterator
+  (ct/async
+   done
+   (ua/go-let [iterator (ua/chan->async-iterator (async/to-chan (range 3)))
+               _ (is-async-iterator iterator)
+               _ (<! (next-async-iterator (.next iterator) false 0))
+               _ (<! (next-async-iterator (.next iterator) false 1))
+               _ (<! (next-async-iterator (.next iterator) false 2))
+               _ (<! (next-async-iterator (.next iterator) true nil))]
+     (done))))
+
+(deftest chan->async-iterator--convert-to-js
+  (ct/async
+   done
+   (ua/go-let [iterator (ua/chan->async-iterator
+                         (async/to-chan
+                          [{:a 1}
+                           {:a 2}])
+                         :convert-to-js true)
+               _ (is-async-iterator iterator)
+               _ (<! (next-async-iterator (.next iterator) false #js {:a 1}))
+               _ (<! (next-async-iterator (.next iterator) false #js {:a 2}))
+               _ (<! (next-async-iterator (.next iterator) true js/undefined))]
+     (done))))
+
+(deftest chan->async-iterator--with-error
+  (ct/async
+   done
+   (ua/go-let [fake-error (js/Error. "test error")
+               iterator (ua/chan->async-iterator (ua/go fake-error) :policy :error)
+               _ (is-async-iterator iterator)
+
+               next (.next iterator)
+               _ (is (ua/promise? next))]
+     (.then
+      next
+      (fn [data]
+        (is false)
+        (done))
+      (fn [err]
+        (go (is (= err fake-error))
+            (<! (next-async-iterator (.next iterator) true nil))
+            (done)))))))
 
 
 

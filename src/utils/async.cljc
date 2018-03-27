@@ -178,6 +178,25 @@
 
 
 
+#?(:cljs
+   (defn chan->async-iterator
+     "Transform `cljs.core.async/chan` to AsyncIterator"
+     [chan & {:keys [policy convert-to-js]
+              :or {policy default-error-policy
+                   convert-to-js false}}]
+     (let [res #js {:next (fn [] (.then (chan->promise chan :policy policy)
+                                       (fn [res]
+                                         #js {:done (nil? res)
+                                              :value (if convert-to-js
+                                                       (if (some? res)
+                                                         (clj->js res)
+                                                         js/undefined)
+                                                       res)})))}]
+       (try (go/set res js/Symbol.asyncIterator (fn [] res)))
+       res)))
+
+
+
 (defn flat-chan [ch]
   (go-loop [c ch]
     (if (chan? c)
