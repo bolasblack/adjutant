@@ -1,11 +1,13 @@
 (ns utils.async
-  #?(:cljs (:require-macros [utils.async :refer [go go-loop go-let go-try-let <<! <!]]))
-  (:require [clojure.core.async.impl.protocols]
-            [clojure.core.async
-             :as async
-             :refer [>! take! put! close!]]
-            [cats.monad.either :as ce]
-            [utils.core :as uc]))
+  #?(:cljs (:require-macros [utils.async :refer [go go-loop go-let go-try-let <!]]))
+  (:require
+   #?(:cljs [goog.object :as go])
+   [clojure.core.async.impl.protocols]
+   [clojure.core.async
+    :as async
+    :refer [>! take! put! close!]]
+   [cats.monad.either :as ce]
+   [utils.core :as uc]))
 
 #?(:clj (defmacro go [& body]
           `(uc/if-cljs
@@ -92,6 +94,39 @@
 
     (uc/error! (str "Unsupported policy: " policy))))
 
+(defn unpack-value [obj & {:keys [policy]
+                           :or {policy default-error-policy}}]
+  (condp = policy
+    :error
+    obj
+
+    :node
+    (and obj
+         (nth obj 1 nil))
+
+    :cats-either
+    (when (ce/right? obj)
+      @obj)
+
+    (uc/error! (str "Unsupported policy: " policy))))
+
+(defn unpack-error [obj & {:keys [policy]
+                           :or {policy default-error-policy}}]
+  (condp = policy
+    :error
+    (let [data (ex-data obj)
+          reason (:reason data)]
+      (or reason obj))
+
+    :node
+    (and obj
+         (nth obj 0 nil))
+
+    :cats-either
+    (when (ce/left? obj)
+      @obj)
+
+    (uc/error! (str "Unsupported policy: " policy))))
 
 
 (defn throw-err [e & error?-opts]
@@ -108,7 +143,7 @@
 
 
 #?(:cljs
-   (defn from-promise
+   (defn promise->chan
      "Transform `js/Promise` to `cljs.core.async/chan`, wrap error
   with `(pack-error % :policy :error)` if not reject with `js/Error`"
      [promise]
@@ -122,11 +157,24 @@
            (put! chan err (fn [] (close! chan)))))
        chan)))
 
+#?(:cljs
+   (defn chan->promise
+     "Resolve `cljs.core.async/chan` next value to `js/Promise`,
+  reject the unpacked result if `error?`"
+     [chan & {:keys [policy]
+              :or {policy default-error-policy}}]
+     (js/Promise.
+      (fn [resolve reject]
+        (go-let [val (<! chan)]
+          (if (error? val :policy policy)
+            (reject (unpack-error val :policy policy))
+            (resolve (unpack-value val :policy policy))))))))
+
 #?(:clj (defmacro <p! [promise]
-          `(<! (from-promise ~promise))))
+          `(<! (promise->chan ~promise))))
 
 #?(:clj (defmacro <p? [promise & error?-opts]
-          `(<? (from-promise ~promise) ~@error?-opts)))
+          `(<? (promise->chan ~promise) ~@error?-opts)))
 
 
 

@@ -6,7 +6,7 @@
 #?(:cljs (defn wrap-handler [f]
            (fn [event context callback]
              (ua/go-let [resp (ua/<<! (ua/go-try-let [resp (f event context)]
-                                        (cond (ua/promise? resp) (ua/from-promise resp)
+                                        (cond (ua/promise? resp) (ua/promise->chan resp)
                                               (ua/chan? resp) resp
                                               :else (ua/pack-value resp))))]
                (if (uc/error? resp)

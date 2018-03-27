@@ -1,7 +1,6 @@
 (ns utils.async-test
   (:refer-clojure :exclude [map])
-  (:require-macros [cljs.core.async.macros :refer [go]]
-                   [alter-cljs.core :refer [alter-var-root]])
+  (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [pjstadig.humane-test-output]
             [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
             [cljs.core.async :as async :refer [<! >! put!]]
@@ -127,31 +126,115 @@
 
 
 
-(deftest from-promise
+(deftest unpack-value
+  (let [err (js/Error. "test")]
+    (is (= 1 (ua/unpack-value 1)))
+    (is (= nil (ua/unpack-value nil)))
+
+    (is (= 1 (ua/unpack-value 1 :policy :error)))
+    (is (= err (ua/unpack-value err :policy :error)))
+    (is (= nil (ua/unpack-value nil :policy :error)))
+
+    (is (= 1 (ua/unpack-value [nil 1] :policy :node)))
+    (is (= err (ua/unpack-value [nil err] :policy :node)))
+    (is (= nil (ua/unpack-value [1 nil] :policy :node)))
+    (is (= nil (ua/unpack-value [1] :policy :node)))
+    (is (= nil (ua/unpack-value nil :policy :node)))
+
+    (is (= 1 (ua/unpack-value (ce/right 1) :policy :cats-either)))
+    (is (= err (ua/unpack-value (ce/right err) :policy :cats-either)))
+    (is (= nil (ua/unpack-value (ce/left 1) :policy :cats-either)))
+    (is (= nil (ua/unpack-value nil :policy :cats-either)))))
+
+
+
+
+(deftest unpack-error
+  (let [err (js/Error. "test")]
+    (is (= 1 (ua/unpack-error (ex-info "" {:reason 1}))))
+    (is (= err (ua/unpack-error err)))
+    (is (= nil (ua/unpack-error nil)))
+
+    (is (= 1 (ua/unpack-error (ex-info "" {:reason 1}) :policy :error)))
+    (is (= err (ua/unpack-error err :policy :error)))
+    (is (= nil (ua/unpack-error nil :policy :error)))
+
+    (is (= 1 (ua/unpack-error [1 nil] :policy :node)))
+    (is (= 1 (ua/unpack-error [1] :policy :node)))
+    (is (= err (ua/unpack-error [err nil] :policy :node)))
+    (is (= err (ua/unpack-error [err] :policy :node)))
+    (is (= nil (ua/unpack-error [nil 1] :policy :node)))
+    (is (= nil (ua/unpack-error [] :policy :node)))
+    (is (= nil (ua/unpack-error nil :policy :node)))
+
+    (is (= 1 (ua/unpack-error (ce/left 1) :policy :cats-either)))
+    (is (= err (ua/unpack-error (ce/left err) :policy :cats-either)))
+    (is (= nil (ua/unpack-error (ce/right err) :policy :cats-either)))
+    (is (= nil (ua/unpack-error nil :policy :cats-either)))))
+
+
+
+
+(deftest promise->chan
   (ct/async
    done
    (ua/go-let [fake-error (js/Error. "fake error")
-               r1 (<! (ua/from-promise (js/Promise.resolve 1)))
-               r2 (<! (ua/from-promise (js/Promise.reject 2)))
-               r3 (<! (ua/from-promise (js/Promise.reject fake-error)))]
+               r1 (<! (ua/promise->chan (js/Promise.resolve 1)))
+               r2 (<! (ua/promise->chan (js/Promise.reject 2)))
+               r3 (<! (ua/promise->chan (js/Promise.reject fake-error)))]
      (is (= 1 r1))
      (is (= {:reason 2} (ex-data r2)))
      (is (= fake-error r3))
      (done))))
 
+(deftest chan->promise
+  (ct/async
+   done
+   (let [fake-error (js/Error. "fake error")
+         resolve-result (fn [promise]
+                          (.then
+                           promise
+                           (fn [val] {:type :resolve :val val})
+                           (fn [val] {:type :reject :val val})))
+         ps [(resolve-result (ua/chan->promise (go 1)))
+             (resolve-result (ua/chan->promise (go fake-error)))
+             (resolve-result (ua/chan->promise (go 1) :policy :error))
+             (resolve-result (ua/chan->promise (go fake-error) :policy :error))
+             (resolve-result (ua/chan->promise (go [nil 1]) :policy :node))
+             (resolve-result (ua/chan->promise (go [1 nil]) :policy :node))
+             (resolve-result (ua/chan->promise (go (ce/right 1)) :policy :cats-either))
+             (resolve-result (ua/chan->promise (go (ce/left 1)) :policy :cats-either))]
+         final-promise (js/Promise.all (clj->js ps))]
+     (.then
+      final-promise
+      (fn [rs]
+        (is (= [{:type :resolve :val 1}
+                {:type :reject :val fake-error}
+                {:type :resolve :val 1}
+                {:type :reject :val fake-error}
+                {:type :resolve :val 1}
+                {:type :reject :val 1}
+                {:type :resolve :val 1}
+                {:type :reject :val 1}]
+               (js->clj rs)))
+        (done))
+      (fn [err]
+        (is false)
+        (done))))))
+
 (deftest <p!
   (let [fake-error (js/Error.)
         resp (macroexpand-1 '(ua/<p! promise))]
-    (is (= '(utils.async/<! (utils.async/from-promise promise))
+    (is (= '(utils.async/<! (utils.async/promise->chan promise))
            resp))))
 
 (deftest <p?
   (let [fake-error (js/Error.)
         r1 (macroexpand-1 '(ua/<p? promise))
         r2 (macroexpand-1 '(ua/<p? promise :policy :node))]
-    (is (= '(utils.async/<? (utils.async/from-promise promise))
+    (is (= '(utils.async/<? (utils.async/promise->chan promise))
            r1))
-    (is (= '(utils.async/<? (utils.async/from-promise promise) :policy :node)
+    (is (= '(utils.async/<? (utils.async/promise->chan promise) :policy :node)
            r2))))
 
 
