@@ -110,11 +110,11 @@
 (deftest pack-error
   (let [err (js/Error. "test")]
     (let [ex (ua/pack-error 1)]
-      (is (= "" (.-message ex)))
+      (is (= "1" (.-message ex)))
       (is (= {:reason 1} (ex-data ex))))
 
     (let [ex (ua/pack-error 1 :policy :error)]
-      (is (= "" (.-message ex)))
+      (is (= "1" (.-message ex)))
       (is (= {:reason 1} (ex-data ex))))
     (let [ex (ua/pack-error err :policy :error)]
       (is (identical? ex err)))

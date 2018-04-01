@@ -2,23 +2,33 @@
   (:require ["lodash.startcase" :as lodash-start-case]
             ["lodash.kebabcase" :as lodash-kebab-case]
             ["lodash.lowerfirst" :as lodash-lower-first]
+            ["lodash.upperfirst" :as lodash-upper-first]
             [clojure.string :as str]))
 
-(defn kebab-case [s & {:keys [keep-pred]}]
-  {:pre [(string? s)]}
-  (let [transformed (lodash-kebab-case s)
+(defn kebab-case [s & {:keys [keep-pred?]}]
+  {:pre [(or (string? s)
+             (keyword? s))]}
+  (let [transformed (lodash-kebab-case (name s))
         matched (re-find #"[\?\!]$" s)]
-    (if (and matched keep-pred)
+    (if (and matched keep-pred?)
       (str transformed matched)
       transformed)))
 
-(defn start-case [s & {:keys [keep-pred]}]
-  {:pre [(string? s)]}
-  (let [transformed (lodash-start-case s)
+(defn start-case [s & {:keys [keep-pred?]}]
+  {:pre [(or (string? s)
+             (keyword? s))]}
+  (let [transformed (lodash-start-case (name s))
         matched (re-find #"[\?\!]$" s)]
-    (if (and matched keep-pred)
+    (if (and matched keep-pred?)
       (str transformed matched)
       transformed)))
+
+(defn sentence-case [s & opts]
+  {:pre [(or (string? s)
+             (keyword? s))]}
+  (-> (apply start-case (name s) opts)
+      .toLowerCase
+      lodash-upper-first))
 
 (defn walk-keys [f hash]
   (letfn [(transform-pair [[k v]]

@@ -84,7 +84,7 @@
     :error
     (cond (uc/error? obj) obj
           (string? obj) (uc/error obj)
-          :else (ex-info "" {:reason obj}))
+          :else (ex-info (.toString obj) {:reason obj}))
 
     :node
     [obj nil]
