@@ -51,7 +51,7 @@
 
 
 
-(defn formula [& opt-coll]
+(defn format-formula [& opt-coll]
   (letfn [(expr? [a]
             (and (coll? a)
                  (keyword? (first a))))
@@ -73,14 +73,25 @@
               (expr? val) (gen-subexpr key (first val) (next val))
               (string? val) (gen-find-subformula key val)
               :else (gen-equal-subformula key val)))]
-    (let [conditions (if (= 1 (count opt-coll))
+    (let [conditions (cond
+                       (and (= 1 (count opt-coll))
+                            (map? (first opt-coll)))
                        (->> (first opt-coll)
                             (into [])
-                            flatten)
+                            (apply concat))
+
+                       (or (= 0 (count opt-coll))
+                           (and (coll? (first opt-coll))
+                                (empty? (first opt-coll))))
+                       []
+
+                       :else
                        opt-coll)
           opt-pairs (partition 2 conditions)
           subformulas (map #(gen-subformula (first %) (last %)) opt-pairs)]
-      (str "AND(" (str/join ", " subformulas) ")"))))
+      (if (empty? subformulas)
+        ""
+        (str "AND(" (str/join ", " subformulas) ")")))))
 
 
 
@@ -103,12 +114,14 @@
 
 
 
-(defn filter [base table-name & {:keys [limit]
+(defn filter [base table-name & {:keys [limit formula]
                                  :or {limit js/Infinity}
                                  :as opts}]
   (let [chan (async/chan)
         sent-count-ref (atom 0)
-        conditon (clj->js (dissoc opts :limit))]
+        conditon (-> (dissoc opts :limit :formula)
+                     (assoc :filterByFormula (format-formula formula))
+                     clj->js)]
     (-> ((:base base) table-name)
         (.select conditon)
         (.eachPage
@@ -141,22 +154,13 @@
 
 
 
-(defmulti insert! (fn [base table-name records]
-                    (if (map? records) :single :coll)))
-
-(defmethod insert! :single [base table-name record]
-  (ua/go-try-let [record (ua/<p? (.create
-                                  ((:base base) table-name)
-                                  (serialize-fields base record)))]
-    (deserialize-record base record)))
-
-(defmethod insert! :coll [base table-name records]
+(defn insert! [base table-name & records]
   (ua/limit-map
    (fn [record]
-     (println "create record" record)
-     (ua/go-try-let [resp (ua/<? (insert! base table-name record))]
-       (println "create record finished, " record)
-       resp))
+     (ua/go-try-let [record (ua/<p? (.create
+                                     ((:base base) table-name)
+                                     (serialize-fields base record)))]
+       (deserialize-record base record)))
    records
    (create-rate-limit-chan)))
 
@@ -173,35 +177,21 @@
                                           (serialize-fields base update)))]
     (deserialize-record base updated-record)))
 
-
 (defmethod update! :coll [base table-name ids update]
   (ua/limit-map
-   (fn [id]
-     (println "patch record" id)
-     (ua/go-try-let [resp (ua/<? (update! base table-name id update))]
-       (println "patch record finished, " id)
-       resp))
+   #(update! base table-name % update)
    ids
    (create-rate-limit-chan)))
 
 
 
-(defmulti delete! (fn [base table-name ids]
-                    (if (coll? ids) :coll :single)))
-
-(defmethod delete! :single [base table-name id]
-  (ua/go-try-let [record (ua/<? (fetch base table-name id))
-                  deleted-record (ua/<p? (.destroy
-                                          ((:base base) table-name)
-                                          (:_id record)))]
-    (deserialize-record base deleted-record)))
-
-(defmethod delete! :coll [base table-name ids]
+(defn delete! [base table-name & ids]
   (ua/limit-map
    (fn [id]
-     (println "delete record" id)
-     (ua/go-try-let [resp (ua/<? (delete! base table-name id))]
-       (println "delete record finished, " id)
-       resp))
+     (ua/go-try-let [record (ua/<? (fetch base table-name id))
+                     deleted-record (ua/<p? (.destroy
+                                             ((:base base) table-name)
+                                             (:_id record)))]
+       (deserialize-record base deleted-record)))
    ids
    (create-rate-limit-chan)))

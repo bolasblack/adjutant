@@ -4,7 +4,7 @@
    ["dotenv/config"]
    [pjstadig.humane-test-output]
    [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
-   ["uuid/v1" :as uuid]
+   ["uuid/v4" :as uuid]
    [utils.airtable :as a]
    [utils.core :refer-macros [error?]]
    [utils.async :as ua :refer-macros [<! <?]]
@@ -39,30 +39,7 @@
 
 
 
-(deftest insert!-single
-  (ct/async
-   done
-   (ua/go-let
-     [id
-      (uuid)
-
-      res
-      (<! (ua/go-try-let [res1 (<? (a/insert! base table-name (assoc default-record :id id)))
-                          res2 (<? (a/fetch base table-name (:_id res1)))]
-            [(:_id res1) res1 res2]))]
-     (if (error? res)
-       (do
-         (prn "reason" (ex-data res))
-         (prn "error" res)
-         (js/console.error res)
-         (is (not (error? res))))
-       (let [[_id res1 res2] res
-             expected-data (assoc default-record :_id _id :id id)]
-         (is (= expected-data res1))
-         (is (= expected-data res2))))
-     (done))))
-
-(deftest insert!-coll
+(deftest insert!
   (ct/async
    done
    (ua/go-let
@@ -70,22 +47,35 @@
       id2 (uuid)
       id3 (uuid)
 
-      res
-      (<! (ua/go-try [(<? (a/insert! base table-name (assoc default-record :id id1)))
-                      (<? (a/insert! base table-name (assoc default-record :id id2)))
-                      (<? (a/insert! base table-name (assoc default-record :id id3)))
-                      (<? (a/filter base table-name {:id [:or id1 id2 id3]}))]))]
-     (if (error? res)
+      insert (<! (ua/chan->vec
+                  (a/insert!
+                   base table-name
+                   (assoc default-record :id id1)
+                   (assoc default-record :id id2)
+                   (assoc default-record :id id3))))
+      filter-res (<! (ua/chan->vec (a/filter base table-name :formula {:ID [:or id1 id2 id3]})))]
+
+     (if (error? insert)
        (do
-         (prn "reason" (ex-data res))
-         (prn "error" res)
-         (js/console.error res)
-         (is (not (error? res))))
-       (do
-         (is (= (assoc default-record :_id (:_id (nth res 0)) :id id1)
-                (nth res 0)))
-         (is (= (assoc default-record :_id (:_id (nth res 1)) :id id2)
-                (nth res 1)))
-         (is (= (assoc default-record :_id (:_id (nth res 2)) :id id3)
-                (nth res 2)))))
+         (prn "reason" (ex-data insert))
+         (prn "error" insert)
+         (js/console.error insert)
+         (is (not (error? insert))))
+       (let [[insert1 insert2 insert3] insert
+             filter1 (first (filter #(= id1 (:id %)) filter-res))
+             filter2 (first (filter #(= id2 (:id %)) filter-res))
+             filter3 (first (filter #(= id3 (:id %)) filter-res))
+             expected1 (assoc default-record :_id (:_id insert1) :id id1)
+             expected2 (assoc default-record :_id (:_id insert2) :id id2)
+             expected3 (assoc default-record :_id (:_id insert3) :id id3)]
+         (is (= 3 (count filter-res)))
+
+         (is (= expected1 insert1))
+         (is (= expected1 filter1))
+
+         (is (= expected2 insert2))
+         (is (= expected2 filter2))
+
+         (is (= expected3 insert3))
+         (is (= expected3 filter3))))
      (done))))
