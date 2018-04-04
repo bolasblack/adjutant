@@ -13,7 +13,7 @@
 (def base (a/base :base-id js/process.env.AIRTABLE_BASE_ID
                   :start-case-fields [:single-line-text]
                   :first-upper-fields [:long-text]
-                  :upper-fields [:url]
+                  :upper-fields [:url :id]
                   :field-name-serializer #(if (= % :checkbox?)
                                             (us/sentence-case % :keep-pred? true)
                                             %)))
@@ -39,14 +39,6 @@
 
 
 
-(deftest formula
-  (is (= "AND(FIND(\"hello\", {world}), FIND(\"nice\", {job}))"
-         (a/formula {:world "hello" :job "nice"})))
-  (is (= "AND(FIND(\"hello\", {world}), FIND(\"nice\", {job}))"
-         (a/formula :world "hello" :job "nice"))))
-
-
-
 (deftest insert!-single
   (ct/async
    done
@@ -55,7 +47,7 @@
       (uuid)
 
       res
-      (<! (ua/go-try-let [res1 (<? (a/insert! base table-name (assoc default-record :ID id)))
+      (<! (ua/go-try-let [res1 (<? (a/insert! base table-name (assoc default-record :id id)))
                           res2 (<? (a/fetch base table-name (:_id res1)))]
             [(:_id res1) res1 res2]))]
      (if (error? res)
@@ -68,4 +60,32 @@
              expected-data (assoc default-record :_id _id :id id)]
          (is (= expected-data res1))
          (is (= expected-data res2))))
+     (done))))
+
+(deftest insert!-coll
+  (ct/async
+   done
+   (ua/go-let
+     [id1 (uuid)
+      id2 (uuid)
+      id3 (uuid)
+
+      res
+      (<! (ua/go-try [(<? (a/insert! base table-name (assoc default-record :id id1)))
+                      (<? (a/insert! base table-name (assoc default-record :id id2)))
+                      (<? (a/insert! base table-name (assoc default-record :id id3)))
+                      (<? (a/filter base table-name {:id [:or id1 id2 id3]}))]))]
+     (if (error? res)
+       (do
+         (prn "reason" (ex-data res))
+         (prn "error" res)
+         (js/console.error res)
+         (is (not (error? res))))
+       (do
+         (is (= (assoc default-record :_id (:_id (nth res 0)) :id id1)
+                (nth res 0)))
+         (is (= (assoc default-record :_id (:_id (nth res 1)) :id id2)
+                (nth res 1)))
+         (is (= (assoc default-record :_id (:_id (nth res 2)) :id id3)
+                (nth res 2)))))
      (done))))

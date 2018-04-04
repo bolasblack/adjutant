@@ -3,6 +3,7 @@
   (:require-macros [cljs.core.async.macros :refer [go go-loop]])
   (:require ["airtable" :as Airtable]
             [cljs.core.async :as async :refer [>! <! put! take! close!]]
+            [utils.core :as uc]
             [utils.async :as ua]
             [utils.string :as us]
             [clojure.string :as str]))
@@ -51,21 +52,35 @@
 
 
 (defn formula [& opt-coll]
-  (let [safe-str (fn safe-str [a]
-                   (cond-> a
-                     (keyword? a) name
-                     (symbol? a) name
-                     true str))
-        gen-find-subformula (fn gen-find-subformula [pair]
-                              (str "FIND(\"" (last pair) "\", {" (safe-str (first pair)) "})"))
-        conditions (if (= 1 (count opt-coll))
-                     (->> (first opt-coll)
-                          (into [])
-                          flatten)
-                     opt-coll)
-        opt-pairs (partition 2 conditions)
-        subformulas (map gen-find-subformula opt-pairs)]
-    (str "AND(" (str/join ", " subformulas) ")")))
+  (letfn [(expr? [a]
+            (and (coll? a)
+                 (keyword? (first a))))
+          (gen-find-subformula [key val]
+            (str "FIND(\"" val "\", " (name key) ")"))
+          (gen-equal-subformula [key val]
+            (str "{" (name key) "}=" val))
+          (gen-subexpr [key fn-name vals]
+            (condp = fn-name
+              :or (as-> vals $
+                    (map #(gen-subformula key %) $)
+                    (str "OR(" (str/join ", " $) ")"))
+              :and (as-> vals $
+                     (map #(gen-subformula key %) $)
+                     (str "AND(" (str/join ", " $) ")"))
+              (uc/error! (str "Unsupported fn-name: " fn-name))))
+          (gen-subformula [key val]
+            (cond
+              (expr? val) (gen-subexpr key (first val) (next val))
+              (string? val) (gen-find-subformula key val)
+              :else (gen-equal-subformula key val)))]
+    (let [conditions (if (= 1 (count opt-coll))
+                       (->> (first opt-coll)
+                            (into [])
+                            flatten)
+                       opt-coll)
+          opt-pairs (partition 2 conditions)
+          subformulas (map #(gen-subformula (first %) (last %)) opt-pairs)]
+      (str "AND(" (str/join ", " subformulas) ")"))))
 
 
 
