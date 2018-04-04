@@ -215,14 +215,28 @@
   (let [src-chan (if (chan? source)
                    source
                    (async/to-chan source))
-        dst-chan (async/chan)]
+        dst-chan (async/chan)
+        wait-all-put-chan (volatile! (async/to-chan [:start]))]
     (go-loop []
       (<! limit-chan)
-      (if-let [d (<! src-chan)]
-        (let [r (f d)]
+      (if-let [data (<! src-chan)]
+        (let [r (f data)]
           (if (chan? r)
-            (take! r #(put! dst-chan %))
-            (put! dst-chan r))
+            (vswap! wait-all-put-chan
+                    (fn [old-chan]
+                      (go-let [resp (<! r)]
+                        (<! old-chan)
+                        (>! dst-chan resp))))
+            (vswap! wait-all-put-chan
+                    (fn [old-chan]
+                      (go (<! old-chan)
+                          (>! dst-chan r)))))
           (recur))
-        (close! dst-chan)))
+        (do (<! @wait-all-put-chan)
+            (close! dst-chan))))
     dst-chan))
+
+
+
+(defn chan->vec [chan]
+  (async/reduce (fn [memo item] (concat memo [item])) [] chan))

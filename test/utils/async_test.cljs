@@ -453,3 +453,14 @@
            r1))
     (is (= '(ua/<? (ua/flat-chan chan) :policy :node)
            r2))))
+
+
+
+
+(deftest chan->vec
+  (ct/async
+   done
+   (ua/go-let [chan (async/to-chan [1 2 3])
+               resp (<! (ua/chan->vec chan))]
+     (is (= [1 2 3] resp))
+     (done))))
