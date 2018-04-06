@@ -141,9 +141,6 @@
            (close! chan))))
     chan))
 
-(defn all [base table-name]
-  (filter base table-name :formula "1 = 1"))
-
 
 
 (defn fetch [base table-name id]
@@ -188,10 +185,9 @@
 (defn delete! [base table-name & ids]
   (ua/limit-map
    (fn [id]
-     (ua/go-try-let [record (ua/<? (fetch base table-name id))
-                     deleted-record (ua/<p? (.destroy
-                                             ((:base base) table-name)
-                                             (:_id record)))]
-       (deserialize-record base deleted-record)))
+     (ua/go (-> ((:base base) table-name)
+                (.destroy id)
+                (ua/<p?)
+                (#(deserialize-record base %)))))
    ids
    (create-rate-limit-chan)))
