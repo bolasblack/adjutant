@@ -1,5 +1,7 @@
 (ns utils.async
-  #?(:cljs (:require-macros [utils.async :refer [go go-loop go-let go-try-let <!]]))
+  #?(:cljs (:require-macros
+            [cljs.core.async]
+            [utils.async :refer [go go-loop go-let go-try-let <!]]))
   (:require
    #?(:cljs [goog.object :as go])
    [clojure.core.async.impl.protocols]
@@ -11,11 +13,18 @@
 
 #?(:clj (defmacro go [& body]
           `(uc/if-cljs
-            (cljs.core.async.macros/go ~@body)
+            (cljs.core.async/go ~@body)
             (clojure.core.async/go ~@body))))
 
 #?(:clj (defmacro go-loop [binding & body]
-          `(go (loop ~binding ~@body))))
+          `(uc/if-cljs
+            (cljs.core.async/go-loop ~binding ~@body)
+            (clojure.core.async/go-loop ~binding ~@body))))
+
+#?(:clj (defmacro <! [ch]
+          `(uc/if-cljs
+            (cljs.core.async/<! ~ch)
+            (clojure.core.async/<! ~ch))))
 
 #?(:clj (defmacro go-let [binding & body]
           `(go (let ~binding ~@body))))
@@ -24,19 +33,10 @@
           `(go (try
                  ~@body
                  (catch (uc/if-cljs js/Error Throwable) e#
-                   (if-let [ex-data# (ex-data e#)]
-                     (if (::from-<? ex-data#)
-                       (:original ex-data#)
-                       e#)
-                     e#))))))
+                   (unpack-error e#))))))
 
 #?(:clj (defmacro go-try-let [binding & body]
           `(go-try (let ~binding ~@body))))
-
-#?(:clj (defmacro <! [ch]
-          `(uc/if-cljs
-            (cljs.core.async/<! ~ch)
-            (clojure.core.async/<! ~ch))))
 
 
 
@@ -64,6 +64,29 @@
     :cats-either (ce/left? obj)
     (uc/error! (str "Unsupported policy: " policy))))
 
+(defn packed-error? [o]
+  (let [data (ex-data o)]
+    (and data
+         (map? data)
+         (::packed-error? data))))
+
+(defn pack-error [obj & {:keys [policy]
+                         :or {policy default-error-policy}}]
+  (condp = policy
+    :error
+    (cond (uc/error? obj) obj
+          (string? obj) (uc/error obj)
+          :else (ex-info (.toString obj) {:reason obj
+                                          ::packed-error? true}))
+
+    :node
+    [obj nil]
+
+    :cats-either
+    (ce/left obj)
+
+    (uc/error! (str "Unsupported policy: " policy))))
+
 (defn pack-value [obj & {:keys [policy]
                          :or {policy default-error-policy}}]
   (condp = policy
@@ -75,22 +98,6 @@
 
     :cats-either
     (ce/right obj)
-
-    (uc/error! (str "Unsupported policy: " policy))))
-
-(defn pack-error [obj & {:keys [policy]
-                         :or {policy default-error-policy}}]
-  (condp = policy
-    :error
-    (cond (uc/error? obj) obj
-          (string? obj) (uc/error obj)
-          :else (ex-info (.toString obj) {:reason obj}))
-
-    :node
-    [obj nil]
-
-    :cats-either
-    (ce/left obj)
 
     (uc/error! (str "Unsupported policy: " policy))))
 
@@ -114,9 +121,9 @@
                            :or {policy default-error-policy}}]
   (condp = policy
     :error
-    (let [data (ex-data obj)
-          reason (:reason data)]
-      (or reason obj))
+    (if (packed-error? obj)
+      (:reason (ex-data obj))
+      obj)
 
     :node
     (and obj
@@ -129,12 +136,10 @@
     (uc/error! (str "Unsupported policy: " policy))))
 
 
+
 (defn throw-err [e & error?-opts]
   (if (apply error? e error?-opts)
-    (if (uc/error? e)
-      (throw e)
-      (uc/error! "Wrap error from channel"
-                 {::from-<? true :original e}))
+    (throw (pack-error e))
     e))
 
 #?(:clj (defmacro <? [ch & error?-opts]

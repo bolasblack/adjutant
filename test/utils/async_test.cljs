@@ -9,9 +9,6 @@
             [utils.async :as ua :include-macros true]
             ["lodash.isequal" :as js-equal]))
 
-
-
-
 (deftest chan?
   (is (not (ua/chan? [])))
   (is (ua/chan? (async/chan))))
@@ -111,11 +108,11 @@
   (let [err (js/Error. "test")]
     (let [ex (ua/pack-error 1)]
       (is (= "1" (.-message ex)))
-      (is (= {:reason 1} (ex-data ex))))
+      (is (= {:reason 1, :utils.async/packed-error? true} (ex-data ex))))
 
     (let [ex (ua/pack-error 1 :policy :error)]
       (is (= "1" (.-message ex)))
-      (is (= {:reason 1} (ex-data ex))))
+      (is (= {:reason 1, :utils.async/packed-error? true} (ex-data ex))))
     (let [ex (ua/pack-error err :policy :error)]
       (is (identical? ex err)))
 
@@ -153,11 +150,11 @@
 
 (deftest unpack-error
   (let [err (js/Error. "test")]
-    (is (= 1 (ua/unpack-error (ex-info "" {:reason 1}))))
+    (is (= 1 (ua/unpack-error (ua/pack-error 1))))
     (is (= err (ua/unpack-error err)))
     (is (= nil (ua/unpack-error nil)))
 
-    (is (= 1 (ua/unpack-error (ex-info "" {:reason 1}) :policy :error)))
+    (is (= 1 (ua/unpack-error (ua/pack-error 1) :policy :error)))
     (is (= err (ua/unpack-error err :policy :error)))
     (is (= nil (ua/unpack-error nil :policy :error)))
 
@@ -177,6 +174,14 @@
 
 
 
+(deftest packed-error?
+  (is (not (ua/packed-error? 1)))
+  (is (not (ua/packed-error? (js/Error.))))
+  (is (ua/packed-error? (ua/pack-error 1))))
+
+
+
+
 (deftest promise->chan
   (ct/async
    done
@@ -185,7 +190,7 @@
                r2 (<! (ua/promise->chan (js/Promise.reject 2)))
                r3 (<! (ua/promise->chan (js/Promise.reject fake-error)))]
      (is (= 1 r1))
-     (is (= {:reason 2} (ex-data r2)))
+     (is (= {:reason 2, :utils.async/packed-error? true} (ex-data r2)))
      (is (= fake-error r3))
      (done))))
 
@@ -357,7 +362,7 @@
    done
    (ua/go-let [e (ex-info "foo" {})
                ch (async/chan)]
-     (>! ch e)
+     (put! ch e)
      (is (= e (<! (ua/go-try
                    (ua/<? ch)
                    :invalid-resp))))
@@ -373,17 +378,18 @@
    done
    (ua/go-let [e [123 nil]
                ch (async/chan)]
-     (>! ch e)
+     (put! ch e)
      (is (= e (<! (ua/go-try
                    (ua/<? ch :policy :node)
                    :invalid-resp))))
-     (>! ch e)
+     (put! ch e)
      (ua/go-try
       (try
         (ua/<? ch :policy :node)
         (catch js/Error err
-          (is (= {:ua/from-<? true
-                  :original [123 nil]})))))
+          (is (= {:utils.async/packed-error? true
+                  :reason e}
+                 (ex-data err))))))
      (done))))
 
 
@@ -444,14 +450,15 @@
 
 (deftest <<!
   (let [res (macroexpand-1 '(ua/<<! chan))]
-    (is (= '(ua/<! (ua/flat-chan chan)) res))))
+    (is (= '(utils.async/<! (utils.async/flat-chan chan))
+           res))))
 
 (deftest <<?
   (let [r1 (macroexpand-1 '(ua/<<? chan))
         r2 (macroexpand-1 '(ua/<<? chan :policy :node))]
-    (is (= '(ua/<? (ua/flat-chan chan))
+    (is (= '(utils.async/<? (utils.async/flat-chan chan))
            r1))
-    (is (= '(ua/<? (ua/flat-chan chan) :policy :node)
+    (is (= '(utils.async/<? (utils.async/flat-chan chan) :policy :node)
            r2))))
 
 
