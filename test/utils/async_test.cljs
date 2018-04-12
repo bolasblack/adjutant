@@ -535,3 +535,29 @@ callback(null, {
         (is (uc/error? resp))
         (is (= fake-error resp)))]
      (done))))
+
+(deftest denodify..
+  (ct/async
+   done
+   (do
+     (is (= (macroexpand-1 '(ua/denodify.. js/fs.readFile "foo"))
+            '((utils.async/denodify js/fs.readFile) "foo")))
+     (is (= (macroexpand-1 '(ua/denodify.. ctx -a "foo"))
+            '((utils.async/denodify (.. ctx -a) ctx) "foo")))
+     (is (= (macroexpand-1 '(ua/denodify.. ctx -a -b -c "foo"))
+            '((utils.async/denodify (.. ctx -a -b -c) (.. ctx -a -b)) "foo")))
+     (let [obj #js{:a #js{:b nil}}]
+       (set! (.-b (.-a obj))
+             (fn [path callback]
+               (callback nil {:path path
+                              :this-bounded? (identical? (js* "this")
+                                                         (.-a obj))})))
+       (ua/go-let
+         [resp1 (ua/<! (ua/denodify..
+                        (fn [path callback]
+                          (callback nil {:path path}))
+                        "test path"))
+          _ (is (= {:path "test path"} resp1))
+          resp2 (ua/<! (ua/denodify.. obj -a -b "test path"))
+          _ (is (= {:path "test path" :this-bounded? true} resp2))]
+         (done))))))

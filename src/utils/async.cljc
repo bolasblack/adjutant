@@ -315,3 +315,28 @@
           (catch js/Error err
             (js/console.error err)))
         denodified-fn))))
+
+#?(:clj
+   (defmacro denodify..
+     "```clojurescript
+  (go (<! (denodify.. fs.readFile \"foo\")))
+  (macroexpand-1 '(denodify.. fs.readFile \"foo\"))
+  #=> ((denodify fs.readFile) \"foo\")
+
+  (go (<! (denodify.. redisClient -get \"foo\")))
+  (macroexpand-1 '(denodify.. redisClient -get \"foo\"))
+  #=> ((denodify (.. redisClient -get) redisClient) \"foo\")
+  ```"
+     ([o & _path]
+      (let [[path args] (split-with #(and (symbol? %)
+                                          (s/starts-with? (name %) "-"))
+                                    _path)]
+        (cond
+          (empty? path)
+          `((denodify ~o) ~@args)
+
+          (= 1 (count path))
+          `((denodify (.. ~o ~@path) ~o) ~@args)
+
+          :else
+          `((denodify (.. ~o ~@path) (.. ~o ~@(butlast path))) ~@args))))))
