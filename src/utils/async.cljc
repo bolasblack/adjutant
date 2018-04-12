@@ -1,9 +1,11 @@
 (ns utils.async
   #?(:cljs (:require-macros
             [cljs.core.async]
-            [utils.async :refer [go go-loop go-let go-try-let <!]]))
+            [utils.async :refer [go go-loop go-let <! <p!]]))
   (:require
    #?(:cljs [goog.object :as go])
+   #?(:cljs ["util" :refer [promisify]])
+   [clojure.string :as s]
    [clojure.core.async.impl.protocols]
    [clojure.core.async
     :as async
@@ -245,3 +247,66 @@
 
 (defn chan->vec [chan]
   (async/reduce (fn [memo item] (concat memo [item])) [] chan))
+
+
+
+#?(:cljs
+   (defn denodify
+     "Returns a function that will wrap the given `nodeFunction`.
+  Instead of taking a callback, the returned function will return
+  a `cljs.core.async/chan` whose fate is decided by the callback
+  behavior of the given node function. The node function should
+  conform to node.js convention of accepting a callback as last
+  argument and calling that callback with error as the first
+  argument and success value on the second argument.
+
+  If the `nodeFunction` calls its callback with multiple success
+  values, the fulfillment value will be an array of them.
+
+  If you pass a `receiver`, the `nodeFunction` will be called as a
+  method on the `receiver`.
+
+  Example of promisifying the asynchronous `readFile` of node.js `fs`-module:
+
+  ```clojurescript
+  (def read-file (denodify (.-readFile fs)))
+
+  (go (try
+        (let [content (<? (read-file \"myfile\" \"utf8\") :policy :node)]
+          (println \"The result of evaluating myfile.js\" (.toString content)))
+        (catch js/Error err
+          (prn 'Error reading file' err))))
+  ```
+
+  Note that if the node function is a method of some object, you
+  can pass the object as the second argument like so:
+
+  ```clojurescript
+  (def redis-get (denodify (.-get redisClient) redisClient))
+
+  (go (<! (redis-get \"foo\")))
+  ```
+  "
+     ([f]
+      (denodify f nil))
+     ([f receiver]
+      (let [promisify-fn (promisify f)
+            denodified-fn (fn denodified-fn [& args]
+                            (go (<p! (.apply promisify-fn receiver (apply array args)))))]
+        (try
+          (js/Object.defineProperty
+           denodified-fn
+           "length"
+           #js {:configurable true :value (if (zero? (.-length promisify-fn))
+                                            0
+                                            (dec (.-length promisify-fn)))})
+          (let [new-name (if (s/blank? (.-name f))
+                           "denodified_fn"
+                           (str "denodified_" (.-name f)))]
+            (js/Object.defineProperty
+             denodified-fn
+             "name"
+             #js {:configurable true :value new-name}))
+          (catch js/Error err
+            (js/console.error err)))
+        denodified-fn))))

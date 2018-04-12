@@ -6,7 +6,7 @@
   "devDependencies": {
     "dotenv": "^5.0.1",
     "lodash.isequal": "^4.5.0",
-    "shadow-cljs": "^2.2.7",
+    "shadow-cljs": "^2.2.27",
     "source-map-support": "^0.5.3",
     "uuid": "^3.2.1"
   },

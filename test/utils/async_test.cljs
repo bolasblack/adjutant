@@ -6,6 +6,7 @@
             [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
             [cljs.core.async :as async :refer [<! >! put!]]
             [cats.monad.either :as ce]
+            [utils.core :as uc :include-macros true]
             [utils.async :as ua :include-macros true]
             ["lodash.isequal" :as js-equal]))
 
@@ -470,4 +471,60 @@
    (ua/go-let [chan (async/to-chan [1 2 3])
                resp (<! (ua/chan->vec chan))]
      (is (= [1 2 3] resp))
+     (done))))
+
+
+
+
+(deftest denodify
+  (ct/async
+   done
+   (ua/go-let
+     [fake-read-file1
+      (ua/denodify
+       (js* "function readFile(path, options, callback) {
+const keys = Object.keys(this)
+callback(null, {
+  path: path,
+  options: options,
+  'this-bounded?': keys.length === 1 && keys[0] === 'bounded' && this.bounded,
+})}")
+       #js {:bounded true})
+
+      _
+      (do
+        (is (= "denodified_readFile" (.-name fake-read-file1)))
+        (is (= 2 (.-length fake-read-file1))))
+
+      resp
+      (js->clj (ua/<! (fake-read-file1 "/file/path.text" nil))
+               :keywordize-keys true)
+
+      _
+      (do
+        (is (map? resp))
+        (is (= {:path "/file/path.text"
+                :options nil
+                :this-bounded? true}
+               resp)))
+
+
+      fake-error
+      (js/Error. "test error")
+
+      fake-read-file2
+      (ua/denodify (fn [path options callback] (callback fake-error)))
+
+      _
+      (do
+        (is (= "denodified_fn" (.-name fake-read-file2)))
+        (is (= 2 (.-length fake-read-file2))))
+
+      resp
+      (ua/<! (fake-read-file2 "/file/path.text" nil))
+
+      _
+      (do
+        (is (uc/error? resp))
+        (is (= fake-error resp)))]
      (done))))
