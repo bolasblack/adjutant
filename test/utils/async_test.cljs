@@ -95,6 +95,10 @@
 
 (deftest pack-value
   (let [err (js/Error. "test")]
+    (is (= {:utils.async/packed-value? true
+            :value nil}
+           (ua/pack-value nil)))
+
     (is (= 1 (ua/pack-value 1)))
 
     (is (= 1 (ua/pack-value 1 :policy :error)))
@@ -105,6 +109,31 @@
 
     (is (= (ce/right 1) (ua/pack-value 1 :policy :cats-either)))
     (is (= (ce/right err) (ua/pack-value err :policy :cats-either)))))
+
+
+
+
+(deftest unpack-value
+  (let [err (js/Error. "test")]
+    (is (= nil (ua/unpack-value (ua/pack-value nil))))
+
+    (is (= 1 (ua/unpack-value 1)))
+    (is (= nil (ua/unpack-value nil)))
+
+    (is (= 1 (ua/unpack-value 1 :policy :error)))
+    (is (= err (ua/unpack-value err :policy :error)))
+    (is (= nil (ua/unpack-value nil :policy :error)))
+
+    (is (= 1 (ua/unpack-value [nil 1] :policy :node)))
+    (is (= err (ua/unpack-value [nil err] :policy :node)))
+    (is (= nil (ua/unpack-value [1 nil] :policy :node)))
+    (is (= nil (ua/unpack-value [1] :policy :node)))
+    (is (= nil (ua/unpack-value nil :policy :node)))
+
+    (is (= 1 (ua/unpack-value (ce/right 1) :policy :cats-either)))
+    (is (= err (ua/unpack-value (ce/right err) :policy :cats-either)))
+    (is (= nil (ua/unpack-value (ce/left 1) :policy :cats-either)))
+    (is (= nil (ua/unpack-value nil :policy :cats-either)))))
 
 
 
@@ -126,29 +155,6 @@
 
     (is (= (ce/left 1) (ua/pack-error 1 :policy :cats-either)))
     (is (= (ce/left err) (ua/pack-error err :policy :cats-either)))))
-
-
-
-
-(deftest unpack-value
-  (let [err (js/Error. "test")]
-    (is (= 1 (ua/unpack-value 1)))
-    (is (= nil (ua/unpack-value nil)))
-
-    (is (= 1 (ua/unpack-value 1 :policy :error)))
-    (is (= err (ua/unpack-value err :policy :error)))
-    (is (= nil (ua/unpack-value nil :policy :error)))
-
-    (is (= 1 (ua/unpack-value [nil 1] :policy :node)))
-    (is (= err (ua/unpack-value [nil err] :policy :node)))
-    (is (= nil (ua/unpack-value [1 nil] :policy :node)))
-    (is (= nil (ua/unpack-value [1] :policy :node)))
-    (is (= nil (ua/unpack-value nil :policy :node)))
-
-    (is (= 1 (ua/unpack-value (ce/right 1) :policy :cats-either)))
-    (is (= err (ua/unpack-value (ce/right err) :policy :cats-either)))
-    (is (= nil (ua/unpack-value (ce/left 1) :policy :cats-either)))
-    (is (= nil (ua/unpack-value nil :policy :cats-either)))))
 
 
 
@@ -193,10 +199,12 @@
    (ua/go-let [fake-error (js/Error. "fake error")
                r1 (<! (ua/promise->chan (js/Promise.resolve 1)))
                r2 (<! (ua/promise->chan (js/Promise.reject 2)))
-               r3 (<! (ua/promise->chan (js/Promise.reject fake-error)))]
+               r3 (<! (ua/promise->chan (js/Promise.reject fake-error)))
+               r4 (<! (ua/promise->chan (js/Promise.resolve nil)))]
      (is (= 1 r1))
-     (is (= {:reason 2, :utils.async/packed-error? true} (ex-data r2)))
+     (is (= (ex-data (ua/pack-error 2)) (ex-data r2)))
      (is (= fake-error r3))
+     (is (= (ua/pack-value nil) r4))
      (done))))
 
 (deftest chan->promise

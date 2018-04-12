@@ -71,6 +71,11 @@
       :cats-either (ce/left? obj)
       (uc/error! (str "Unsupported policy: " policy)))))
 
+(defn packed-value? [o]
+  (and o
+       (map? o)
+       (::packed-value? o)))
+
 (defn packed-error? [o]
   (let [data (ex-data o)]
     (and data
@@ -83,44 +88,15 @@
     :error
     (cond (uc/error? obj) obj
           (string? obj) (uc/error obj)
-          :else (ex-info (.toString obj) {:reason obj
-                                          ::packed-error? true}))
+          :else (ex-info (.toString obj) {::packed-error? true
+                                          :reason obj}))
+
 
     :node
     [obj nil]
 
     :cats-either
     (ce/left obj)
-
-    (uc/error! (str "Unsupported policy: " policy))))
-
-(defn pack-value [obj & {:keys [policy]
-                         :or {policy default-error-policy}}]
-  (condp = policy
-    :error
-    obj
-
-    :node
-    [nil obj]
-
-    :cats-either
-    (ce/right obj)
-
-    (uc/error! (str "Unsupported policy: " policy))))
-
-(defn unpack-value [obj & {:keys [policy]
-                           :or {policy default-error-policy}}]
-  (condp = policy
-    :error
-    obj
-
-    :node
-    (and obj
-         (nth obj 1 nil))
-
-    :cats-either
-    (when (ce/right? obj)
-      @obj)
 
     (uc/error! (str "Unsupported policy: " policy))))
 
@@ -140,6 +116,39 @@
     (when (ce/left? obj)
       @obj)
 
+    (uc/error! (str "Unsupported policy: " policy))))
+
+(defn pack-value [obj & {:keys [policy]
+                         :or {policy default-error-policy}}]
+  (condp = policy
+    :error
+    (or obj {::packed-value? true
+             :value nil})
+
+    :node
+    [nil obj]
+
+    :cats-either
+    (ce/right obj)
+
+    (uc/error! (str "Unsupported policy: " policy))))
+
+(defn unpack-value [obj & {:keys [policy]
+                           :or {policy default-error-policy}}]
+  (condp = policy
+    :error
+    (if (packed-value? obj)
+      (:value obj)
+      obj)
+
+    :node
+    (and obj
+         (nth obj 1 nil))
+    
+    :cats-either
+    (when (ce/right? obj)
+      @obj)
+    
     (uc/error! (str "Unsupported policy: " policy))))
 
 
@@ -162,11 +171,12 @@
      (let [chan (async/chan)]
        (.then
         promise
-        #(put! chan %1 (fn [] (close! chan)))
-        #(let [err (if (uc/error? %1)
-                     %1
-                     (pack-error %1 :policy :error))]
-           (put! chan err (fn [] (close! chan)))))
+        #(put! chan
+               (pack-value %1 :policy :error)
+               (fn [] (close! chan)))
+        #(put! chan
+               (pack-error %1 :policy :error)
+               (fn [] (close! chan))))
        chan)))
 
 #?(:cljs
