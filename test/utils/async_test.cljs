@@ -540,12 +540,21 @@ callback(null, {
   (ct/async
    done
    (do
+     (is (= (macroexpand-1 '(ua/denodify.. js/fs.readFile))
+            '((utils.async/denodify js/fs.readFile))))
      (is (= (macroexpand-1 '(ua/denodify.. js/fs.readFile "foo"))
             '((utils.async/denodify js/fs.readFile) "foo")))
+
+     (is (= (macroexpand-1 '(ua/denodify.. ctx -a))
+            '((utils.async/denodify (.. ctx -a) ctx))))
      (is (= (macroexpand-1 '(ua/denodify.. ctx -a "foo"))
             '((utils.async/denodify (.. ctx -a) ctx) "foo")))
+
+     (is (= (macroexpand-1 '(ua/denodify.. ctx -a -b -c))
+            '((utils.async/denodify (.. ctx -a -b -c) (.. ctx -a -b)))))
      (is (= (macroexpand-1 '(ua/denodify.. ctx -a -b -c "foo"))
             '((utils.async/denodify (.. ctx -a -b -c) (.. ctx -a -b)) "foo")))
+
      (let [obj #js{:a #js{:b nil}}]
        (set! (.-b (.-a obj))
              (fn [path callback]
