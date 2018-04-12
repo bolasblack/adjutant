@@ -25,18 +25,22 @@
 
 
 (deftest error?
+  (is (not (ua/error? 1)))
   (is (ua/error? (js/Error.)))
   (is (ua/error? (js/Error.) :policy :error))
+  (is (ua/error? (js/Error.) {:policy :error}))
 
   (is (not (ua/error? [] :policy :node)))
   (is (not (ua/error? [nil] :policy :node)))
   (is (ua/error? [(js/Error.)] :policy :node))
   (is (ua/error? [""] :policy :node))
+  (is (ua/error? [""] {:policy :node}))
 
   (is (not (ua/error? "" :policy :cats-either)))
   (is (not (ua/error? (ce/right 1) :policy :cats-either)))
   (is (not (ua/error? (ce/right (js/Error.)) :policy :cats-either)))
   (is (ua/error? (ce/left 1) :policy :cats-either))
+  (is (ua/error? (ce/left 1) {:policy :cats-either}))
 
   (try
     (ua/error? "" :policy :unknown)
@@ -441,12 +445,15 @@
 (deftest flat-chan
   (ct/async
    done
-   (ua/go-let [chan1 (go (go (go 1)))
+   (ua/go-let [fake-error (js/Error. "flat-chan error")
+               chan1 (go (go (go 1)))
                chan2 (go 1)
-               chan3 1]
+               chan3 1
+               chan4 (go (go fake-error))]
      (is (= 1 (<! (ua/flat-chan chan1))))
      (is (= 1 (<! (ua/flat-chan chan2))))
      (is (= 1 (<! (ua/flat-chan chan3))))
+     (is (= fake-error (<! (ua/flat-chan chan4))))
      (done))))
 
 (deftest <<!

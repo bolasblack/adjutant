@@ -58,13 +58,18 @@
   * `:error`: (default) Expect `obj` is normal value, return true if `obj` is Error(js)/Exception(java)
   * `:node`: Expect `obj` is `coll?`, return true if `(some? (first obj))`
   * `:cats-either`: Expect `obj` is `cats.monad.either/Either`, return true if `(cats.monad.either/left? obj)`"
-  [obj & {:keys [policy]
-          :or {policy default-error-policy}}]
-  (condp = policy
-    :error (uc/error? obj)
-    :node (some? (first obj))
-    :cats-either (ce/left? obj)
-    (uc/error! (str "Unsupported policy: " policy))))
+  [obj & opts]
+  (let [{:keys [policy]
+         :or {policy default-error-policy}}
+        (if (and (= 1 (count opts))
+                 (map? (first opts)))
+          (first opts)
+          (apply hash-map opts))]
+    (condp = policy
+      :error (uc/error? obj)
+      :node (some? (first obj))
+      :cats-either (ce/left? obj)
+      (uc/error! (str "Unsupported policy: " policy)))))
 
 (defn packed-error? [o]
   (let [data (ex-data o)]

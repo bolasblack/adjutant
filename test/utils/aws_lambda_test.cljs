@@ -14,7 +14,6 @@
    (ua/go-let [event (js/Object.)
                context (js/Object.)
                fake-data (js/Object.)
-               fake-error (uc/error "test error")
 
                promise-resolve-chan
                (async/chan)
@@ -27,13 +26,15 @@
                 (fn [err data]
                   (async/put! promise-resolve-chan [err data])))
 
+               fake-error-for-promise-reject
+               (js/Error. "fake error for promise reject")
                promise-reject-chan
                (async/chan)
                promise-reject-resp
                ((lambda/wrap-handler
                  (fn [event context]
                    (async/put! promise-reject-chan [event context])
-                   (js/Promise.reject fake-error)))
+                   (js/Promise.reject fake-error-for-promise-reject)))
                 event context
                 (fn [err data]
                   (async/put! promise-reject-chan [err data])))
@@ -49,13 +50,15 @@
                 (fn [err data]
                   (async/put! chan-normal-chan [err data])))
 
+               fake-error-for-chan
+               (js/Error. "fake error for chan")
                chan-error-chan
                (async/chan)
                chan-error-resp
                ((lambda/wrap-handler
                  (fn [event context]
                    (async/put! chan-error-chan [event context])
-                   (go fake-error)))
+                   (go fake-error-for-chan)))
                 event context
                 (fn [err data]
                   (async/put! chan-error-chan [err data])))
@@ -108,9 +111,9 @@
      (is (nil? other-err))
      (is (identical? fake-data other-data))
 
-     (is (identical? fake-error promise-reject-err))
+     (is (identical? fake-error-for-promise-reject promise-reject-err))
      (is (nil? promise-reject-data))
-     (is (identical? fake-error chan-error-err))
+     (is (identical? fake-error-for-chan chan-error-err))
      (is (nil? chan-error-data))
 
      (done))))
