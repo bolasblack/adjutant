@@ -69,7 +69,7 @@
       :error (uc/error? obj)
       :node (some? (first obj))
       :cats-either (ce/left? obj)
-      (uc/error! (str "Unsupported policy: " policy)))))
+      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
 
 (defn packed-value? [o]
   (and o
@@ -98,7 +98,7 @@
     :cats-either
     (ce/left obj)
 
-    (uc/error! (str "Unsupported policy: " policy))))
+    (uc/error! (str "Unsupported policy: " (pr-str policy)))))
 
 (defn unpack-error [obj & {:keys [policy]
                            :or {policy default-error-policy}}]
@@ -116,7 +116,7 @@
     (when (ce/left? obj)
       @obj)
 
-    (uc/error! (str "Unsupported policy: " policy))))
+    (uc/error! (str "Unsupported policy: " (pr-str policy)))))
 
 (defn pack-value [obj & {:keys [policy]
                          :or {policy default-error-policy}}]
@@ -131,7 +131,7 @@
     :cats-either
     (ce/right obj)
 
-    (uc/error! (str "Unsupported policy: " policy))))
+    (uc/error! (str "Unsupported policy: " (pr-str policy)))))
 
 (defn unpack-value [obj & {:keys [policy]
                            :or {policy default-error-policy}}]
@@ -144,12 +144,12 @@
     :node
     (and obj
          (nth obj 1 nil))
-    
+
     :cats-either
     (when (ce/right? obj)
       @obj)
-    
-    (uc/error! (str "Unsupported policy: " policy))))
+
+    (uc/error! (str "Unsupported policy: " (pr-str policy)))))
 
 
 
