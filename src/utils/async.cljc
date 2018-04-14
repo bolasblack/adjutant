@@ -52,6 +52,16 @@
 
 (def default-error-policy :error)
 
+(defn- policy-match? [expected actual]
+  (or (= expected actual)
+      (contains? expected actual)))
+
+(defn- args-hashify [opts]
+  (if (and (= 1 (count opts))
+           (map? (first opts)))
+    (first opts)
+    (apply hash-map opts)))
+
 (defn error?
   "Detect if `obj` is error, available policy:
 
@@ -59,14 +69,9 @@
   * `:node`: Expect `obj` is `coll?`, return true if `(some? (first obj))`
   * `:cats-either`: Expect `obj` is `cats.monad.either/Either`, return true if `(cats.monad.either/left? obj)`"
   [obj & opts]
-  (let [{:keys [policy]
-         :or {policy default-error-policy}}
-        (if (and (= 1 (count opts))
-                 (map? (first opts)))
-          (first opts)
-          (apply hash-map opts))]
-    (condp = policy
-      :error (uc/error? obj)
+  (let [{:keys [policy]} (args-hashify opts)]
+    (condp policy-match? policy
+      #{:error nil} (uc/error? obj)
       :node (some? (first obj))
       :cats-either (ce/left? obj)
       (uc/error! (str "Unsupported policy: " (pr-str policy))))))
@@ -82,74 +87,74 @@
          (map? data)
          (::packed-error? data))))
 
-(defn pack-error [obj & {:keys [policy]
-                         :or {policy default-error-policy}}]
-  (condp = policy
-    :error
-    (cond (uc/error? obj) obj
-          (string? obj) (uc/error obj)
-          :else (ex-info (.toString obj) {::packed-error? true
-                                          :reason obj}))
+(defn pack-error [obj & opts]
+  (let [{:keys [policy]} (args-hashify opts)]
+    (condp policy-match? policy
+      #{:error nil}
+      (cond (uc/error? obj) obj
+            (string? obj) (uc/error obj)
+            :else (ex-info (.toString obj) {::packed-error? true
+                                            :reason obj}))
 
 
-    :node
-    [obj nil]
+      :node
+      [obj nil]
 
-    :cats-either
-    (ce/left obj)
+      :cats-either
+      (ce/left obj)
 
-    (uc/error! (str "Unsupported policy: " (pr-str policy)))))
+      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
 
-(defn unpack-error [obj & {:keys [policy]
-                           :or {policy default-error-policy}}]
-  (condp = policy
-    :error
-    (if (packed-error? obj)
-      (:reason (ex-data obj))
-      obj)
+(defn unpack-error [obj & opts]
+  (let [{:keys [policy]} (args-hashify opts)]
+    (condp policy-match? policy
+      #{:error nil}
+      (if (packed-error? obj)
+        (:reason (ex-data obj))
+        obj)
 
-    :node
-    (and obj
-         (nth obj 0 nil))
+      :node
+      (and obj
+           (nth obj 0 nil))
 
-    :cats-either
-    (when (ce/left? obj)
-      @obj)
+      :cats-either
+      (when (ce/left? obj)
+        @obj)
 
-    (uc/error! (str "Unsupported policy: " (pr-str policy)))))
+      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
 
-(defn pack-value [obj & {:keys [policy]
-                         :or {policy default-error-policy}}]
-  (condp = policy
-    :error
-    (or obj {::packed-value? true
-             :value nil})
+(defn pack-value [obj & opts]
+  (let [{:keys [policy]} (args-hashify opts)]
+    (condp policy-match? policy
+      #{:error nil}
+      (or obj {::packed-value? true
+               :value nil})
 
-    :node
-    [nil obj]
+      :node
+      [nil obj]
 
-    :cats-either
-    (ce/right obj)
+      :cats-either
+      (ce/right obj)
 
-    (uc/error! (str "Unsupported policy: " (pr-str policy)))))
+      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
 
-(defn unpack-value [obj & {:keys [policy]
-                           :or {policy default-error-policy}}]
-  (condp = policy
-    :error
-    (if (packed-value? obj)
-      (:value obj)
-      obj)
+(defn unpack-value [obj & opts]
+  (let [{:keys [policy]} (args-hashify opts)]
+    (condp policy-match? policy
+      #{:error nil}
+      (if (packed-value? obj)
+        (:value obj)
+        obj)
 
-    :node
-    (and obj
-         (nth obj 1 nil))
+      :node
+      (and obj
+           (nth obj 1 nil))
 
-    :cats-either
-    (when (ce/right? obj)
-      @obj)
+      :cats-either
+      (when (ce/right? obj)
+        @obj)
 
-    (uc/error! (str "Unsupported policy: " (pr-str policy)))))
+      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
 
 
 
@@ -183,14 +188,14 @@
    (defn chan->promise
      "Resolve `cljs.core.async/chan` next value to `js/Promise`,
   reject the unpacked result if `error?`"
-     [chan & {:keys [policy]
-              :or {policy default-error-policy}}]
-     (js/Promise.
-      (fn [resolve reject]
-        (go-let [val (<! chan)]
-          (if (error? val :policy policy)
-            (reject (unpack-error val :policy policy))
-            (resolve (unpack-value val :policy policy))))))))
+     [chan & opts]
+     (let [{:keys [policy]} (args-hashify opts)]
+       (js/Promise.
+        (fn [resolve reject]
+          (go-let [val (<! chan)]
+            (if (error? val :policy policy)
+              (reject (unpack-error val :policy policy))
+              (resolve (unpack-value val :policy policy)))))))))
 
 #?(:clj (defmacro <p! [promise]
           `(<! (promise->chan ~promise))))
@@ -203,17 +208,20 @@
 #?(:cljs
    (defn chan->async-iterator
      "Transform `cljs.core.async/chan` to AsyncIterator"
-     [chan & {:keys [policy convert-to-js]
-              :or {policy default-error-policy
-                   convert-to-js false}}]
-     (let [res #js {:next (fn [] (.then (chan->promise chan :policy policy)
-                                       (fn [res]
-                                         #js {:done (nil? res)
-                                              :value (if convert-to-js
-                                                       (if (some? res)
-                                                         (clj->js res)
-                                                         js/undefined)
-                                                       res)})))}]
+     [chan & opts]
+     (let [{:keys [policy convert-to-js]
+            :or {convert-to-js false}}
+           (args-hashify opts)
+
+           res
+           #js {:next (fn [] (.then (chan->promise chan :policy policy)
+                                   (fn [res]
+                                     #js {:done (nil? res)
+                                          :value (if convert-to-js
+                                                   (if (some? res)
+                                                     (clj->js res)
+                                                     js/undefined)
+                                                   res)})))}]
        (try (go/set res js/Symbol.asyncIterator (fn [] res)))
        res)))
 

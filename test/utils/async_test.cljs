@@ -27,6 +27,7 @@
 (deftest error?
   (is (not (ua/error? 1)))
   (is (ua/error? (js/Error.)))
+  (is (ua/error? (js/Error.) :policy nil))
   (is (ua/error? (js/Error.) :policy :error))
   (is (ua/error? (js/Error.) {:policy :error}))
 
@@ -100,10 +101,11 @@
            (ua/pack-value nil)))
 
     (is (= 1 (ua/pack-value 1)))
-
+    (is (= 1 (ua/pack-value 1 :policy nil)))
     (is (= 1 (ua/pack-value 1 :policy :error)))
     (is (= err (ua/pack-value err :policy :error)))
 
+    (is (= [nil 1] (ua/pack-value 1 {:policy :node})))
     (is (= [nil 1] (ua/pack-value 1 :policy :node)))
     (is (= [nil err] (ua/pack-value err :policy :node)))
 
@@ -119,11 +121,12 @@
 
     (is (= 1 (ua/unpack-value 1)))
     (is (= nil (ua/unpack-value nil)))
-
+    (is (= 1 (ua/unpack-value 1 :policy nil)))
     (is (= 1 (ua/unpack-value 1 :policy :error)))
     (is (= err (ua/unpack-value err :policy :error)))
     (is (= nil (ua/unpack-value nil :policy :error)))
 
+    (is (= 1 (ua/unpack-value [nil 1] {:policy :node})))
     (is (= 1 (ua/unpack-value [nil 1] :policy :node)))
     (is (= err (ua/unpack-value [nil err] :policy :node)))
     (is (= nil (ua/unpack-value [1 nil] :policy :node)))
@@ -147,9 +150,12 @@
     (let [ex (ua/pack-error 1 :policy :error)]
       (is (= "1" (.-message ex)))
       (is (= {:reason 1, :utils.async/packed-error? true} (ex-data ex))))
+    (let [ex (ua/pack-error err :policy nil)]
+      (is (identical? ex err)))
     (let [ex (ua/pack-error err :policy :error)]
       (is (identical? ex err)))
 
+    (is (= [1 nil] (ua/pack-error 1 {:policy :node})))
     (is (= [1 nil] (ua/pack-error 1 :policy :node)))
     (is (= [err nil] (ua/pack-error err :policy :node)))
 
@@ -164,11 +170,12 @@
     (is (= 1 (ua/unpack-error (ua/pack-error 1))))
     (is (= err (ua/unpack-error err)))
     (is (= nil (ua/unpack-error nil)))
-
+    (is (= err (ua/unpack-error err :policy nil)))
     (is (= 1 (ua/unpack-error (ua/pack-error 1) :policy :error)))
     (is (= err (ua/unpack-error err :policy :error)))
     (is (= nil (ua/unpack-error nil :policy :error)))
 
+    (is (= 1 (ua/unpack-error [1 nil] {:policy :node})))
     (is (= 1 (ua/unpack-error [1 nil] :policy :node)))
     (is (= 1 (ua/unpack-error [1] :policy :node)))
     (is (= err (ua/unpack-error [err nil] :policy :node)))
