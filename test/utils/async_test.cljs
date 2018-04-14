@@ -491,8 +491,8 @@
   (ct/async
    done
    (ua/go-let [chan (async/to-chan [1 2 3])
-               resp (<! (ua/chan->vec chan))]
-     (is (= [1 2 3] resp))
+               resp (ua/<! (async/into '() chan))]
+     (is (= '(3 2 1) resp))
      (done))))
 
 

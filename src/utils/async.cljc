@@ -268,11 +268,6 @@
 
 
 
-(defn chan->vec [chan]
-  (async/reduce (fn [memo item] (concat memo [item])) [] chan))
-
-
-
 #?(:cljs
    (defn denodify
      "Returns a function that will wrap the given `nodeFunction`.
