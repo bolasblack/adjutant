@@ -41,6 +41,9 @@
 #?(:clj (defmacro go-try-let [binding & body]
           `(go-try (let ~binding ~@body))))
 
+#?(:clj (defmacro go-try-loop [binding & body]
+          `(go-try (loop ~binding ~@body))))
+
 
 
 (defn chan? [a]
