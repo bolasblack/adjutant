@@ -1,4 +1,5 @@
 (ns utils.async
+  (:refer-clojure :exclude [into])
   #?(:cljs (:require-macros
             [cljs.core.async]
             [utils.async :refer [go go-loop go-let <! <p!]]))
@@ -11,7 +12,7 @@
     :as async
     :refer [>! take! put! close!]]
    [cats.monad.either :as ce]
-   [utils.core :as uc]))
+   [utils.core :as uc :include-macros true]))
 
 #?(:clj (defmacro go [& body]
           `(uc/if-cljs
@@ -353,3 +354,20 @@
 
           :else
           `((denodify (.. ~o ~@path) (.. ~o ~@(butlast path))) ~@args))))))
+
+
+
+(defn into
+  ([coll ch]
+   (into coll ch :reject-onerror? false))
+  ([coll ch & opts]
+   (let [{:keys [policy reject-onerror?]} (args-hashify opts)]
+     (if-not reject-onerror?
+       (async/into coll ch)
+       (async/reduce
+        (fn [result o]
+          (if (error? o :policy policy)
+            (reduced o)
+            (conj result o)))
+        coll
+        ch)))))

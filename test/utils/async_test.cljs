@@ -1,5 +1,5 @@
 (ns utils.async-test
-  (:refer-clojure :exclude [map])
+  (:refer-clojure :exclude [map into])
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [pjstadig.humane-test-output]
             [goog.object :as go]
@@ -336,11 +336,11 @@
 (defn- create-chan [duration & args]
   (let [chan (async/chan)]
     (go (<! (async/timeout duration))
-        (>! chan (into [1] args))
+        (>! chan (cljs.core/into [1] args))
         (<! (async/timeout duration))
-        (>! chan (into [2] args))
+        (>! chan (cljs.core/into [2] args))
         (<! (async/timeout duration))
-        (>! chan (into [3] args))
+        (>! chan (cljs.core/into [3] args))
         (async/close! chan))
     chan))
 
@@ -487,12 +487,21 @@
 
 
 
-(deftest chan->vec
+(deftest into
   (ct/async
    done
-   (ua/go-let [chan (async/to-chan [1 2 3])
-               resp (ua/<! (async/into '() chan))]
-     (is (= '(3 2 1) resp))
+   (ua/go-let [resp1 (ua/<! (ua/into '() (async/to-chan [1 2 3])))
+               resp2 (ua/<! (ua/into
+                             []
+                             (ua/go-let [chan (async/chan)]
+                               (>! chan 1)
+                               (>! chan ["test error"])
+                               (>! chan 2)
+                               chan)
+                             :reject-onerror? true
+                             :policy :node))]
+     (is (= '(3 2 1) resp1))
+     (is (= ["test error"] resp2))
      (done))))
 
 
