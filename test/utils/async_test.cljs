@@ -1,5 +1,5 @@
 (ns utils.async-test
-  (:refer-clojure :exclude [map into])
+  (:refer-clojure :exclude [into])
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [pjstadig.humane-test-output]
             [goog.object :as go]
@@ -172,14 +172,12 @@
                r2 (<! (ua/promise->chan (js/Promise.reject 2)))
                r3 (<! (ua/promise->chan (js/Promise.reject fake-error)))
                r4 (<! (ua/promise->chan (js/Promise.resolve nil)))
-               r5 (<! (ua/promise->chan (js/Promise.resolve 1) :pack-value identity :pack-error identity))
-               r6 (<! (ua/promise->chan (js/Promise.reject 2) :pack-value identity :pack-error identity))]
+               r5 (<! (ua/promise->chan (js/Promise.resolve 1) :chan (async/chan nil (map inc))))]
      (is (= (ua/pack-value 1) r1))
      (is (= (ex-data (ua/pack-error 2)) (ex-data r2)))
      (is (= (ex-data (ua/pack-error fake-error)) (ex-data r3)))
-     (is (= (ua/pack-value nil) r4))
-     (is (= 1 r5))
-     (is (= 2 r6))
+     (is (= nil r4))
+     (is (= 2 r5))
      (done))))
 
 (deftest <p!

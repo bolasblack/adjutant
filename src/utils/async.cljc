@@ -131,13 +131,16 @@
 #?(:cljs
    (defn promise->chan
      "Transform `js/Promise` to `cljs.core.async/chan`"
-     [promise & {:keys [pack-value pack-error]
-                 :or {pack-value pack-value
-                      pack-error pack-error}}]
-     (let [chan (async/chan)]
+     [promise & opts]
+     (let [{:keys [chan]
+            :or {chan (async/chan)}}
+           (args-hashify opts)]
        (.then
         promise
-        #(put! chan (pack-value %1) (fn [] (close! chan)))
+        (fn [val]
+          (if val
+            (put! chan val (fn [] (close! chan)))
+            (fn [] (close! chan))))
         #(put! chan (pack-error %1) (fn [] (close! chan))))
        chan)))
 
