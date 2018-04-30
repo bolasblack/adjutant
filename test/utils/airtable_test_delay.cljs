@@ -6,7 +6,7 @@
    [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
    ["uuid/v4" :as uuid]
    [utils.airtable :as a]
-   [utils.core :refer-macros [error?]]
+   [utils.core :refer [error?]]
    [utils.async :as ua :refer-macros [<! <?]]
    [utils.string :as us]))
 
@@ -47,13 +47,14 @@
       id2 (uuid)
       id3 (uuid)
 
-      insert (<! (ua/chan->vec
+      insert (<! (ua/into
+                  []
                   (a/insert!
                    base table-name
                    (assoc default-record :id id1)
                    (assoc default-record :id id2)
                    (assoc default-record :id id3))))
-      filter-res (<! (ua/chan->vec (a/filter base table-name :formula {:ID [:or id1 id2 id3]})))]
+      filter-res (<! (ua/into [] (a/filter base table-name :formula {:ID [:or id1 id2 id3]})))]
 
      (if (error? insert)
        (do
@@ -91,7 +92,8 @@
       id2 (uuid)
       id3 (uuid)
       res (<! (ua/go-try-let
-                [[i1 i2 i3 :as insert-res] (<? (ua/chan->vec
+                [[i1 i2 i3 :as insert-res] (<? (ua/into
+                                                []
                                                 (a/insert!
                                                  base table-name
                                                  (assoc default-record :id id1)
@@ -100,10 +102,10 @@
                  single-update (<? (a/update! base table-name
                                               (:_id i1)
                                               {:single-line-text "single update"}))
-                 coll-update (<? (ua/chan->vec (a/update! base table-name
-                                                          [(:_id i2) (:_id i3)]
-                                                          {:single-line-text "coll update"})))
-                 filter-res (<? (ua/chan->vec (a/filter base table-name :formula {:ID [:or id1 id2 id3]})))]
+                 coll-update (<? (ua/into [] (a/update! base table-name
+                                                        [(:_id i2) (:_id i3)]
+                                                        {:single-line-text "coll update"})))
+                 filter-res (<? (ua/into [] (a/filter base table-name :formula {:ID [:or id1 id2 id3]})))]
                 [insert-res
                  single-update
                  coll-update
@@ -145,15 +147,16 @@
       id2 (uuid)
       id3 (uuid)
       res (<! (ua/go-try-let
-                [[i1 i2 i3 :as insert-res] (<? (ua/chan->vec
+                [[i1 i2 i3 :as insert-res] (<? (ua/into
+                                                []
                                                 (a/insert!
                                                  base table-name
                                                  (assoc default-record :id id1)
                                                  (assoc default-record :id id2)
                                                  (assoc default-record :id id3))))
-                 delete-res (<? (ua/chan->vec (a/delete! base table-name
-                                                         (:_id i1) (:_id i2) (:_id i3))))
-                 filter-res (<? (ua/chan->vec (a/filter base table-name :formula {:ID [:or id1 id2 id3]})))]
+                 delete-res (<? (ua/into [] (a/delete! base table-name
+                                                       (:_id i1) (:_id i2) (:_id i3))))
+                 filter-res (<? (ua/into [] (a/filter base table-name :formula {:ID [:or id1 id2 id3]})))]
                 [insert-res
                  delete-res
                  filter-res]))]

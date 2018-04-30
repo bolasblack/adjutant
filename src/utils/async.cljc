@@ -11,8 +11,17 @@
    [clojure.core.async
     :as async
     :refer [>! take! put! close!]]
-   [cats.monad.either :as ce]
    [utils.core :as uc :include-macros true]))
+
+
+
+(defn- args-hashify [opts]
+  (if (and (= 1 (count opts))
+           (map? (first opts)))
+    (first opts)
+    (apply hash-map opts)))
+
+
 
 #?(:clj (defmacro go [& body]
           `(uc/if-cljs
@@ -49,183 +58,112 @@
 (defn chan? [a]
   (satisfies? clojure.core.async.impl.protocols/ReadPort a))
 
-(defn promise? [obj]
-  (and obj (fn? (.-then obj))))
+#?(:cljs
+   (defn promise? [obj]
+     (and obj (fn? (.-then obj)))))
 
 
-
-(def default-error-policy :error)
-
-(defn- policy-match? [expected actual]
-  (or (= expected actual)
-      (contains? expected actual)))
-
-(defn- args-hashify [opts]
-  (if (and (= 1 (count opts))
-           (map? (first opts)))
-    (first opts)
-    (apply hash-map opts)))
-
-(defn error?
-  "Detect if `obj` is error, available policy:
-
-  * `:error`: (default) Expect `obj` is normal value, return true if `obj` is Error(js)/Exception(java)
-  * `:node`: Expect `obj` is `coll?`, return true if `(some? (first obj))`
-  * `:cats-either`: Expect `obj` is `cats.monad.either/Either`, return true if `(cats.monad.either/left? obj)`"
-  [obj & opts]
-  (let [{:keys [policy]} (args-hashify opts)]
-    (condp policy-match? policy
-      #{:error nil} (uc/error? obj)
-      :node (some? (first obj))
-      :cats-either (ce/left? obj)
-      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
-
-(defn packed-value? [o]
-  (and o
-       (map? o)
-       (::packed-value? o)))
 
 (defn packed-error? [o]
-  (let [data (ex-data o)]
-    (and data
-         (map? data)
-         (::packed-error? data))))
+  (-> (ex-data o)
+      ::packed-error?))
 
-(defn pack-error [obj & opts]
-  (let [{:keys [policy]} (args-hashify opts)]
-    (condp policy-match? policy
-      #{:error nil}
-      (cond (uc/error? obj) obj
-            (string? obj) (uc/error obj)
-            :else (ex-info (.toString obj) {::packed-error? true
-                                            :reason obj}))
+(defn pack-error [o]
+  (if (packed-error? o)
+    o
+    (ex-info (str "Packed error: "
+                  (if (some? o)
+                    (or (.-message o) (.toString o))
+                    ""))
+             {::packed-error? true :reason o})))
 
+(defn unpack-error [o]
+  (if (packed-error? o)
+    (-> (ex-data o)
+        :reason)
+    o))
 
-      :node
-      [obj nil]
+(defn packed-value? [o]
+  (::packed-value? o))
 
-      :cats-either
-      (ce/left obj)
+(defn pack-value [o]
+  (if (packed-value? o)
+    o
+    {::packed-value? true
+     :value o}))
 
-      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
-
-(defn unpack-error [obj & opts]
-  (let [{:keys [policy]} (args-hashify opts)]
-    (condp policy-match? policy
-      #{:error nil}
-      (if (packed-error? obj)
-        (:reason (ex-data obj))
-        obj)
-
-      :node
-      (and obj
-           (nth obj 0 nil))
-
-      :cats-either
-      (when (ce/left? obj)
-        @obj)
-
-      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
-
-(defn pack-value [obj & opts]
-  (let [{:keys [policy]} (args-hashify opts)]
-    (condp policy-match? policy
-      #{:error nil}
-      (or obj {::packed-value? true
-               :value nil})
-
-      :node
-      [nil obj]
-
-      :cats-either
-      (ce/right obj)
-
-      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
-
-(defn unpack-value [obj & opts]
-  (let [{:keys [policy]} (args-hashify opts)]
-    (condp policy-match? policy
-      #{:error nil}
-      (if (packed-value? obj)
-        (:value obj)
-        obj)
-
-      :node
-      (and obj
-           (nth obj 1 nil))
-
-      :cats-either
-      (when (ce/right? obj)
-        @obj)
-
-      (uc/error! (str "Unsupported policy: " (pr-str policy))))))
+(defn unpack-value [o]
+  (if (packed-value? o)
+    (:value o)
+    o))
 
 
 
-(defn throw-err [e & error?-opts]
-  (if (apply error? e error?-opts)
-    (throw (pack-error e))
-    e))
+(defn throw-err [e & opts]
+  (let [final-opts (args-hashify opts)
+        failure? (or (:failure? final-opts)
+                     uc/error?)]
+    (if (failure? e)
+      (throw (pack-error e))
+      e)))
 
-#?(:clj (defmacro <? [ch & error?-opts]
-          `(throw-err (<! ~ch) ~@error?-opts)))
+#?(:clj (defmacro <? [ch & opts]
+          `(throw-err (<! ~ch) ~@opts)))
 
 
-
-#?(:cljs
-   (defn promise->chan
-     "Transform `js/Promise` to `cljs.core.async/chan`, wrap error
-  with `(pack-error % :policy :error)` if not reject with `js/Error`"
-     [promise]
-     (let [chan (async/chan)]
-       (.then
-        promise
-        #(put! chan
-               (pack-value %1 :policy :error)
-               (fn [] (close! chan)))
-        #(put! chan
-               (pack-error %1 :policy :error)
-               (fn [] (close! chan))))
-       chan)))
 
 #?(:cljs
    (defn chan->promise
-     "Resolve `cljs.core.async/chan` next value to `js/Promise`,
-  reject the unpacked result if `error?`"
+     "Resolve `cljs.core.async/chan` next value to `js/Promise`"
      [chan & opts]
-     (let [{:keys [policy]} (args-hashify opts)]
+     (let [{:keys [failure? transform]
+            :or {failure? uc/error?
+                 transform identity}}
+           (args-hashify opts)]
        (js/Promise.
         (fn [resolve reject]
-          (go-let [val (<! chan)]
-            (if (error? val :policy policy)
-              (reject (unpack-error val :policy policy))
-              (resolve (unpack-value val :policy policy)))))))))
+          (go-let [_val (<! chan)
+                   val (transform _val)]
+            (if (failure? _val)
+              (reject val)
+              (resolve val))))))))
 
-#?(:clj (defmacro <p! [promise]
-          `(<! (promise->chan ~promise))))
+#?(:cljs
+   (defn promise->chan
+     "Transform `js/Promise` to `cljs.core.async/chan`"
+     [promise & {:keys [pack-value pack-error]
+                 :or {pack-value pack-value
+                      pack-error pack-error}}]
+     (let [chan (async/chan)]
+       (.then
+        promise
+        #(put! chan (pack-value %1) (fn [] (close! chan)))
+        #(put! chan (pack-error %1) (fn [] (close! chan))))
+       chan)))
 
-#?(:clj (defmacro <p? [promise & error?-opts]
-          `(<? (promise->chan ~promise) ~@error?-opts)))
+#?(:clj (defmacro <p! [promise & opts]
+          `(<! (promise->chan ~promise ~@opts))))
+
+#?(:clj (defmacro <p? [promise & opts]
+          `(<? (promise->chan ~promise ~@opts) ~@opts)))
 
 
 
 #?(:cljs
    (defn chan->async-iterator
-     "Transform `cljs.core.async/chan` to AsyncIterator"
+     "Transform `cljs.core.async/chan` to AsyncIterator, pass
+  all options to `chan->promise`, default `:transform` become
+  `clj->js`"
      [chan & opts]
-     (let [{:keys [policy convert-to-js]
-            :or {convert-to-js false}}
-           (args-hashify opts)
+     (let [opts
+           (merge {:transform clj->js}
+                  (args-hashify opts))
 
            res
-           #js {:next (fn [] (.then (chan->promise chan :policy policy)
+           #js {:next (fn [] (.then (chan->promise chan opts)
                                    (fn [res]
                                      #js {:done (nil? res)
-                                          :value (if convert-to-js
-                                                   (if (some? res)
-                                                     (clj->js res)
-                                                     js/undefined)
-                                                   res)})))}]
+                                          :value res})))}]
        (try (go/set res js/Symbol.asyncIterator (fn [] res)))
        res)))
 
@@ -240,8 +178,8 @@
 #?(:clj (defmacro <<! [ch]
           `(<! (flat-chan ~ch))))
 
-#?(:clj (defmacro <<? [ch & error?-opts]
-          `(<? (flat-chan ~ch) ~@error?-opts)))
+#?(:clj (defmacro <<? [ch & opts]
+          `(<? (flat-chan ~ch) ~@opts)))
 
 
 
@@ -294,7 +232,7 @@
   (def read-file (denodify (.-readFile fs)))
 
   (go (try
-        (let [content (<? (read-file \"myfile\" \"utf8\") :policy :node)]
+        (let [content (<? (read-file \"myfile\" \"utf8\") :failure? first)]
           (println \"The result of evaluating myfile.js\" (.toString content)))
         (catch js/Error err
           (prn 'Error reading file' err))))
@@ -362,14 +300,17 @@
 
 (defn into
   ([coll ch]
-   (into coll ch :reject-onerror? false))
+   (into coll ch :reject-onfailed? false))
   ([coll ch & opts]
-   (let [{:keys [policy reject-onerror?]} (args-hashify opts)]
-     (if-not reject-onerror?
+   (let [{:keys [failure? reject-onfailed?]
+          :or {failure? uc/error?
+               reject-onfailed? true}}
+         (args-hashify opts)]
+     (if-not reject-onfailed?
        (async/into coll ch)
        (async/reduce
         (fn [result o]
-          (if (error? o :policy policy)
+          (if (failure? o)
             (reduced o)
             (conj result o)))
         coll

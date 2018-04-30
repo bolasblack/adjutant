@@ -1,4 +1,5 @@
-(ns utils.core)
+(ns utils.core
+  #?(:cljs (:require-macros [utils.core :refer [if-cljs]])))
 
 #?(:clj
    (defn cljs-env?
@@ -39,11 +40,10 @@
                          (with-meta s `{:tag java.lang.String})
                          s) ~m))))))
 
-#?(:clj
-   (defmacro error? [obj]
-     `(instance?
-       (if-cljs js/Error Exception)
-       ~obj)))
+(defn error? [obj]
+  (instance?
+   (if-cljs js/Error Exception)
+   obj))
 
 #?(:clj
    (defmacro cond-converge

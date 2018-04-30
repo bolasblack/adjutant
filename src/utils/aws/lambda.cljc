@@ -10,8 +10,8 @@
                                               (ua/chan? resp) resp
                                               :else (ua/pack-value resp))))]
                (if (uc/error? resp)
-                 (callback resp)
-                 (callback nil resp))))))
+                 (callback (ua/unpack-error resp))
+                 (callback nil (ua/unpack-value resp)))))))
 
 #?(:clj (defmacro defhandler [& body]
           `(wrap-handler (~'fn ~@body))))
