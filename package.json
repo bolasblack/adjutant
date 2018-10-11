@@ -1,23 +1,16 @@
 {
   "scripts": {
-    "watch": "shadow-cljs watch main main-test delay-test",
+    "watch": "shadow-cljs watch main main-test",
     "compile": "shadow-cljs compile"
   },
   "devDependencies": {
-    "dotenv": "^5.0.1",
-    "lodash.isequal": "^4.5.0",
-    "shadow-cljs": "^2.2.27",
-    "source-map-support": "^0.5.3",
-    "uuid": "^3.2.1"
-  },
-  "dependencies": {
-    "airtable": "^0.5.2",
-    "aws-sdk": "^2.113.0",
-    "gulp": "^4.0.0",
+    "git-hook-pure": "^1.2.0",
     "lodash.isobjectlike": "^4.0.0",
     "lodash.kebabcase": "^4.0.0",
     "lodash.lowerfirst": "^4.0.0",
     "lodash.startcase": "^4.0.0",
-    "lodash.upperfirst": "^4.3.1"
-  }
+    "lodash.upperfirst": "^4.3.1",
+    "shadow-cljs": "^2.6.10"
+  },
+  "dependencies": {}
 }

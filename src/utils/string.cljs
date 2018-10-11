@@ -1,39 +1,74 @@
 (ns utils.string
-  (:require ["lodash.startcase" :as lodash-start-case]
-            ["lodash.kebabcase" :as lodash-kebab-case]
-            ["lodash.lowerfirst" :as lodash-lower-first]
-            ["lodash.upperfirst" :as lodash-upper-first]
+  (:require ["/js-vendors/lodash.startcase" :default lodash-start-case]
+            ["/js-vendors/lodash.kebabcase" :default lodash-kebab-case]
+            ["/js-vendors/lodash.lowerfirst" :default lodash-lower-first]
+            ["/js-vendors/lodash.upperfirst" :default lodash-upper-first]
             [clojure.string :as str]))
 
-(defn kebab-case [s & {:keys [keep-pred?]}]
+(def last-sym-re #"[\?\!]$")
+
+(defn kebab-case
+  "Converts string to [kebab case](https://en.wikipedia.org/wiki/Letter_case#Special_case_styles).
+  Use `:keep-sym? true` to keep [Predicate Suffix `?`](https://clojure.org/guides/weird_characters#__code_symbol_code_predicate_suffix) and [Unsafe Operations `!`](https://clojure.org/guides/weird_characters#__code_symbol_code_unsafe_operations)
+
+  (kebab-case \"Foo! Bar?\" :keep-sym? true)
+  // => 'foo-bar?'
+
+  (kebab-case \"foo?Bar!\" :keep-sym? true)
+  // => 'foo-bar!'
+
+  (kebab-case \"__FOO?_BAR__?\")
+  // => 'foo-bar'"
+  [s & {:keys [keep-sym?]}]
   {:pre [(or (string? s)
              (keyword? s))]}
   (let [transformed (lodash-kebab-case (name s))
-        matched (re-find #"[\?\!]$" s)]
-    (if (and matched keep-pred?)
+        matched (re-find last-sym-re s)]
+    (if (and matched keep-sym?)
       (str transformed matched)
       transformed)))
 
-(defn start-case [s & {:keys [keep-pred?]}]
+(defn start-case
+  "Converts string to [start case](https://en.wikipedia.org/wiki/Letter_case#Title_case).
+  Use `:keep-sym? true` to keep [Predicate Suffix `?`](https://clojure.org/guides/weird_characters#__code_symbol_code_predicate_suffix) and [Unsafe Operations `!`](https://clojure.org/guides/weird_characters#__code_symbol_code_unsafe_operations)
+
+  (start-case \"--foo!-bar--!\" :keep-sym? true)
+  // => 'Foo Bar!'
+
+  (start-case \"foo?Bar?\" :keep-sym? true);
+  // => 'Foo Bar?'
+
+  (start-case \"__FOO?_BAR__!\")
+  // => 'FOO BAR'"
+  [s & {:keys [keep-sym?]}]
   {:pre [(or (string? s)
              (keyword? s))]}
   (let [transformed (lodash-start-case (name s))
-        matched (re-find #"[\?\!]$" s)]
-    (if (and matched keep-pred?)
+        matched (re-find last-sym-re s)]
+    (if (and matched keep-sym?)
       (str transformed matched)
       transformed)))
 
-(defn sentence-case [s & opts]
-  {:pre [(or (string? s)
-             (keyword? s))]}
-  (-> (apply start-case (name s) opts)
+(defn sentence-case
+  "Converts string to [sentence case](https://en.wikipedia.org/wiki/Letter_case#Sentence_case).
+  Use `:keep-sym? true` to keep [Predicate Suffix `?`](https://clojure.org/guides/weird_characters#__code_symbol_code_predicate_suffix) and [Unsafe Operations `!`](https://clojure.org/guides/weird_characters#__code_symbol_code_unsafe_operations)
+
+  (sentence-case \"--foo!-bar--!\" :keep-sym? true)
+  // => 'Foo bar!'
+
+  (sentence-case \"foo?Bar?\" :keep-sym? true);
+  // => 'Foo bar?'
+
+  (sentence-case \"__FOO?_BAR__!\")
+  // => 'Foo bar'"
+  [s & opts]
+  (-> (apply start-case s opts)
       .toLowerCase
       lodash-upper-first))
 
 (defn walk-keys [f hash]
   (letfn [(transform-pair [[k v]]
-            [(f k)
-             (if (map? v) (walk-keys f v) v)])]
+            [(f k) (if (map? v) (walk-keys f v) v)])]
     (into {} (map transform-pair hash))))
 
 (defn kebab-case-keys [hash & opts]

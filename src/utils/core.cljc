@@ -49,24 +49,19 @@
    (defmacro cond-converge
      "Example:
 
-  (macroexpand-1
-   '(cond-converge 1
-      (constantly 3)
-      (fn [const-3 prev-val]
-        (+ const-3 prev-val))))
+  (cond-converge initial-val
+    pred1-always-return-3 +
+    pred2-always-return-false +)
 
-  # =>
+  Equals:
 
-  (let [G__4572 (identity 1)
-        G__4572 (let [test__4547__auto__ (constantly 3)
-                      step__4548__auto__ (fn [const-3 prev-val] (+ const-3 prev-val))
-                      ___4549__auto__ (assert (and (fn? test__4547__auto__)
-                                                   (fn? step__4548__auto__)))
-                      test-result__4550__auto__ (test__4547__auto__ G__4572)]
-                  (if test-result__4550__auto__
-                    (step__4548__auto__ test-result__4550__auto__ G__4572)
-                    G__4572))]
-    G__4572)"
+  (if-let [test1-result (fn1-always-return-3 initial-val)]
+    (let [step1-result (+ test1-result initial-val)]
+      (if-let [test2-result (pred2-always-return-false step1-result)]
+        (let [step2-result (+ test2-result step1-result)]
+          step2-result)
+        step1-result))
+    initial-val)"
      [expr & clauses]
      (assert (even? (count clauses)))
      (let [g (gensym)
