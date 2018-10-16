@@ -1,5 +1,22 @@
 (ns utils.core
-  #?(:cljs (:require-macros [utils.core :refer [if-cljs]])))
+  #?(:cljs (:require-macros [utils.core :refer [if-cljs error! assert-args]])))
+
+(defn hashify
+  "Transform arguments to hash-map
+
+  Example:
+
+  (defn my-func [& inputs]
+    (let [opts (hashify inputs)]
+      opts))
+
+  (my-func {:a 1}) #=> {:a 1}
+  (my-func :a 1) #=> {:a 1}"
+  [args]
+  (if (and (= 1 (count args))
+           (map? (first args)))
+    (first args)
+    (apply hash-map args)))
 
 #?(:clj
    (defn cljs-env?
@@ -16,6 +33,7 @@
      (if (cljs-env? &env) then else)))
 
 (defn error
+  "Generate a cross-platform exception"
   ([s]
    #?(:cljs (js/Error. s)
       :clj (RuntimeException. s)))
@@ -40,14 +58,24 @@
                          (with-meta s `{:tag java.lang.String})
                          s) ~m))))))
 
-(defn error? [obj]
+(defn error?
+  "Detect obj is an error"
+  [obj]
   (instance?
    (if-cljs js/Error Exception)
    obj))
 
-#?(:clj
-   (defmacro cond-converge
-     "Example:
+(defn- cond-converge*
+  [initial-val [[pred processer] & rest-pairs]]
+  (if-let [pred-res (pred initial-val)]
+    (let [process-res (processer initial-val pred-res)]
+      (if rest-pairs
+        (recur process-res rest-pairs)
+        process-res))
+    initial-val))
+
+(defn cond-converge
+  "Example:
 
   (cond-converge initial-val
     pred1-always-return-3 +
@@ -56,25 +84,29 @@
   Equals:
 
   (if-let [test1-result (fn1-always-return-3 initial-val)]
-    (let [step1-result (+ test1-result initial-val)]
+    (let [step1-result (+ initial-val test1-result)]
       (if-let [test2-result (pred2-always-return-false step1-result)]
-        (let [step2-result (+ test2-result step1-result)]
+        (let [step2-result (+ step1-result test2-result)]
           step2-result)
         step1-result))
     initial-val)"
-     [expr & clauses]
-     (assert (even? (count clauses)))
-     (let [g (gensym)
-           steps (map (fn [[test step]]
-                        `(let [test# ~test
-                               step# ~step
-                               _# (assert (and (fn? test#)
-                                               (fn? step#)))
-                               test-result# (test# ~g)]
-                           (if test-result#
-                             (step# test-result# ~g)
-                             ~g)))
-                      (partition 2 clauses))]
-       `(let [~g ~expr
-              ~@(interleave (repeat g) steps)]
-          ~g))))
+  [initial-val & clauses]
+  (assert (even? (count clauses)))
+  (let [clause-pairs (partition 2 clauses)]
+    (cond-converge* initial-val clause-pairs)))
+
+#?(:clj
+   (defmacro assert-args
+     "Help assert arguments in macros
+
+  Source from:
+  https://github.com/clojure/clojure/blob/f27f6de232a5f024613cd235b7fa2c38b40763db/src/clj/clojure/core.clj#L1824
+
+  Example:
+  https://github.com/clojure/clojure/blob/f27f6de232a5f024613cd235b7fa2c38b40763db/src/clj/clojure/core.clj#L1842"
+     [& pairs]
+     `(do (when-not ~(first pairs)
+            (throw (IllegalArgumentException.
+                    (str (first ~'&form) " requires " ~(second pairs) " in " ~'*ns* ":" (:line (meta ~'&form))))))
+          ~(let [more (nnext pairs)]
+             (when more)))))

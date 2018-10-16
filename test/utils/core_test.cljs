@@ -4,6 +4,11 @@
    [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
    [utils.core :as uc :include-macros true]))
 
+(deftest hashify
+  (let [expected {:a 2 'a 3 "a" 4 1 5}]
+    (is (= expected (uc/hashify (list :a 2 'a 3 "a" 4 1 5))))
+    (is (= expected (uc/hashify (list {:a 2 'a 3 "a" 4 1 5}))))))
+
 (deftest error
   (let [err (uc/error "test error msg")]
     (is (.-message err) "test error msg"))
@@ -42,7 +47,7 @@
       (is (uc/error? err)))))
 
 (deftest cond-converge
-  (is (= 1.5
+  (is (= (/ 4 6)
          (uc/cond-converge 3
            dec #(* %1 %2)
            (constantly 4) #(/ %2 %1)))))
