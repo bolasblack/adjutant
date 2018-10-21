@@ -1,11 +1,15 @@
 (ns utils.string
-  (:require ["/js-vendors/lodash.startcase" :default lodash-start-case]
-            ["/js-vendors/lodash.kebabcase" :default lodash-kebab-case]
-            ["/js-vendors/lodash.lowerfirst" :default lodash-lower-first]
-            ["/js-vendors/lodash.upperfirst" :default lodash-upper-first]
-            [clojure.string :as str]))
+  (:require-macros
+   [utils.core :refer [def-]]
+   [utils.string :refer [<<]])
+  (:require
+   ["/js-vendors/lodash.startcase" :default lodash-start-case]
+   ["/js-vendors/lodash.kebabcase" :default lodash-kebab-case]
+   ["/js-vendors/lodash.lowerfirst" :default lodash-lower-first]
+   ["/js-vendors/lodash.upperfirst" :default lodash-upper-first]
+   [clojure.string :as str]))
 
-(def last-sym-re #"[\?\!]$")
+(def- last-sym-re #"[\?\!]$")
 
 (defn kebab-case
   "Converts string to [kebab case](https://en.wikipedia.org/wiki/Letter_case#Special_case_styles).

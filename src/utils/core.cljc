@@ -1,5 +1,9 @@
 (ns utils.core
-  #?(:cljs (:require-macros [utils.core :refer [if-cljs error! assert-args]])))
+  #?(:cljs (:require-macros
+            [utils.core :refer [if-cljs error! assert-args defmacro- def-]]
+            [clojure.core.incubator :as incu]))
+  (:require
+   #?@(:clj [[clojure.core.incubator :as incu]])))
 
 (defn hashify
   "Transform arguments to hash-map
@@ -110,3 +114,16 @@
                     (str (first ~'&form) " requires " ~(second pairs) " in " ~'*ns* ":" (:line (meta ~'&form))))))
           ~(let [more (nnext pairs)]
              (when more)))))
+
+#?(:clj
+   (do
+     (defmacro defmacro-
+       [name & decls]
+       `(incu/defmacro- ~name ~@decls))
+     (alter-meta! #'defmacro- assoc :doc (:doc (meta #'incu/defmacro-)))))
+
+#?(:clj
+   (defmacro def-
+     "Same as def but yields a private definition"
+     [name & decls]
+     (list* `def (with-meta name (assoc (meta name) :private true)) decls)))

@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "watch": "shadow-cljs watch main main-test",
+    "dev": "shadow-cljs -A:dev watch main main-dev main-test",
     "compile": "shadow-cljs compile"
   },
   "devDependencies": {
