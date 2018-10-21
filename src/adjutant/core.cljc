@@ -1,6 +1,6 @@
-(ns utils.core
+(ns adjutant.core
   #?(:cljs (:require-macros
-            [utils.core :refer [if-cljs error! assert-args defmacro- def-]]
+            [adjutant.core :refer [if-cljs error! assert-args defmacro- def-]]
             [clojure.core.incubator :as incu]))
   (:require
    #?@(:clj [[clojure.core.incubator :as incu]])))

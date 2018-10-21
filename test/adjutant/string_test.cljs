@@ -1,8 +1,8 @@
-(ns utils.string-test
+(ns adjutant.string-test
   (:require
    [pjstadig.humane-test-output]
    [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
-   [utils.string :as us]))
+   [adjutant.string :as us]))
 
 (deftest kebab-case
   (is (= "hello-world" (us/kebab-case "!__hello_world__?")))

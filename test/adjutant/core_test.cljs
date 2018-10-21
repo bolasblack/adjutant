@@ -1,8 +1,8 @@
-(ns utils.core-test
+(ns adjutant.core-test
   (:require
    [pjstadig.humane-test-output]
    [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
-   [utils.core :as uc :include-macros true]))
+   [adjutant.core :as uc :include-macros true]))
 
 (defn -main [])
 

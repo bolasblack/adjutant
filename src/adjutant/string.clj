@@ -1,4 +1,4 @@
-(ns utils.string
+(ns adjutant.string
   (:require
    [clojure.core.strint :as strint]))
 

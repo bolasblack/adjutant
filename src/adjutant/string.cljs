@@ -1,7 +1,7 @@
-(ns utils.string
+(ns adjutant.string
   (:require-macros
-   [utils.core :refer [def-]]
-   [utils.string :refer [<<]])
+   [adjutant.core :refer [def-]]
+   [adjutant.string :refer [<<]])
   (:require
    ["/js-vendors/lodash.startcase" :default lodash-start-case]
    ["/js-vendors/lodash.kebabcase" :default lodash-kebab-case]

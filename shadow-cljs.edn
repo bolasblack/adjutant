@@ -5,7 +5,7 @@
                  :compiler-options {:source-map true}}
           :main-dev {:id :main-dev
                      :target :node-script
-                     :main utils.core-test/-main
+                     :main adjutant.core-test/-main
                      :output-to ".shadow-cljs/out/main-dev/index.js"}
           :main-test {:target :node-test
                       :output-to "lib/main-test.js"
