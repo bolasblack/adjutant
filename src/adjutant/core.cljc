@@ -127,3 +127,19 @@
      "Same as def but yields a private definition"
      [name & decls]
      (list* `def (with-meta name (assoc (meta name) :private true)) decls)))
+
+(defn ->tap
+  "(-> 1
+       (->tap pr)
+       (is= 1)"
+  [v f]
+  (f v)
+  v)
+
+(defn ->>tap
+  "(->> 1
+       (->>tap pr)
+       (is= 1)"
+  [f v]
+  (f v)
+  v)

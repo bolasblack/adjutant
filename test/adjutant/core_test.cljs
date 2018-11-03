@@ -57,3 +57,9 @@
 (deftest def-
   (uc/def- private-var 1)
   (is (:private (meta #'private-var))))
+
+(deftest ->tap
+  (is (= 1 (-> 1 (uc/->tap inc)))))
+
+(deftest ->>tap
+  (is (= 1 (->> 1 (uc/->>tap inc)))))
