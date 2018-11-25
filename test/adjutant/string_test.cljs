@@ -1,6 +1,5 @@
 (ns adjutant.string-test
   (:require
-   [pjstadig.humane-test-output]
    [cljs.test :as ct :refer-macros [deftest testing is] :include-macros true]
    [adjutant.string :as us]))
 
